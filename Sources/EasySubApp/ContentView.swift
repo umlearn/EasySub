@@ -181,9 +181,6 @@ struct ContentView: View {
                         .disabled(store.items.isEmpty || store.isRunning)
                         .help("Clear all videos from the list")
                 }
-                if #available(macOS 26.0, *) {
-                    ToolbarSpacer(.fixed, placement: .primaryAction)
-                }
                 ToolbarItem(placement: .primaryAction) { searchControl }
             }
             .overlay {
