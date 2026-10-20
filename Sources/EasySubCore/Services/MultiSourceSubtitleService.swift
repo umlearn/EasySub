@@ -1,0 +1,146 @@
+import Foundation
+
+/// Application-facing service. Candidates are ranked across all sources before downloading.
+/// Format priority still spans all sources before trying a fallback format.
+public actor MultiSourceSubtitleService: SubtitleDownloading {
+    private let coordinator: SubtitleSearchCoordinator
+
+    public init() { coordinator = SubtitleSearchCoordinator(provider: ShooterProvider()) }
+    public init(provider: any SubtitleProvider) { coordinator = SubtitleSearchCoordinator(provider: provider) }
+    public init(providers: [any SubtitleProvider]) throws {
+        coordinator = try SubtitleSearchCoordinator(providers: providers)
+    }
+
+    /// Exposes candidates without downloading or writing; a future picker can use the same engine.
+    public func search(_ request: SubtitleSearchRequest) async throws -> SubtitleSearchResult {
+        try await coordinator.search(request)
+    }
+
+    /// Places candidates safe enough for automatic matching first while retaining the remaining
+    /// results for manual inspection.
+    public func searchForSelection(_ request: SubtitleSearchRequest) async throws -> SubtitleSearchResult {
+        let report = try await coordinator.search(request)
+        let ranked = SubtitleMatcher.rank(report.candidates, forName: request.matchingName)
+        let rankedIDs = Set(ranked.map(\.id))
+        return SubtitleSearchResult(candidates: ranked + report.candidates.filter { !rankedIDs.contains($0.id) },
+                                    failures: report.failures)
+    }
+
+    /// Explicit selection permits candidates whose timing metadata is unavailable.
+    public func download(candidate: SubtitleCandidate, video: URL, overwrite: Bool,
+                         renameSubtitle: Bool = true, outputDirectory: URL? = nil) async throws -> URL {
+        let destination = manualDestination(video: video, candidate: candidate, overwrite: overwrite,
+                                            renameSubtitle: renameSubtitle, outputDirectory: outputDirectory)
+        let raw = try await coordinator.download(candidate)
+        let data = try SubtitleFileWriter.normalized(raw, format: candidate.format)
+        try SubtitleFileWriter.save(data, to: destination, overwrite: overwrite)
+        return destination
+    }
+
+    /// Manual selection may intentionally download more than one candidate of the same format.
+    /// Preserve existing files by choosing movie.1.srt, movie.2.srt, and so on.
+    private func manualDestination(video: URL, candidate: SubtitleCandidate, overwrite: Bool,
+                                   renameSubtitle: Bool, outputDirectory: URL?) -> URL {
+        let base = destination(video: video, candidate: candidate, renameSubtitle: renameSubtitle,
+                               outputDirectory: outputDirectory)
+        guard !overwrite, FileManager.default.fileExists(atPath: base.path) else { return base }
+        for index in 1...Int.max {
+            let indexedDestination = base.deletingPathExtension()
+                .appendingPathExtension(String(index))
+                .appendingPathExtension(candidate.format.rawValue)
+            if !FileManager.default.fileExists(atPath: indexedDestination.path) { return indexedDestination }
+        }
+        return base
+    }
+
+    public func download(video: URL, preference: SubtitlePreference, overwrite: Bool,
+                         renameSubtitle: Bool, outputDirectory: URL?) async throws -> DownloadResult {
+        try Task.checkCancellation()
+        let formats: [SubtitleFormat] = preference == .srt ? [.srt, .ass] : [.ass, .srt]
+        func renamedDestination(_ format: SubtitleFormat) -> URL {
+            let filename = video.deletingPathExtension().lastPathComponent + "." + format.rawValue
+            return (outputDirectory ?? video.deletingLastPathComponent()).appendingPathComponent(filename)
+        }
+        let existing = overwrite || !renameSubtitle ? [] : formats.map(renamedDestination).filter {
+            FileManager.default.fileExists(atPath: $0.path)
+        }
+        if (preference != .both && existing.contains(renamedDestination(formats[0]))) || existing.count == 2 {
+            return DownloadResult(existing: existing)
+        }
+        let report = try await coordinator.search(SubtitleSearchRequest(video: video))
+        // Unknown timing can be selected when filename metadata is a safe match. The chosen
+        // candidate is returned in DownloadResult so the UI can disclose that limitation.
+        let candidates = SubtitleMatcher.rank(report.candidates, for: video)
+        var saved: [URL] = []
+        var selections: [SubtitleCandidate] = []
+        var kept: [URL] = []
+        var warnings: [String] = []
+        var diagnostics = report.failures
+        var lastError: (any Error)? = report.failures.first?.error
+        for format in formats {
+            try Task.checkCancellation()
+            let renamedURL = renamedDestination(format)
+            if existing.contains(renamedURL) {
+                kept.append(renamedURL)
+                if preference != .both { break }
+                continue
+            }
+            var downloaded = false
+            var formatError: (any Error)?
+            for candidate in candidates where candidate.format == format {
+                let url = destination(video: video, candidate: candidate, renameSubtitle: renameSubtitle,
+                                      outputDirectory: outputDirectory)
+                if !overwrite, FileManager.default.fileExists(atPath: url.path) {
+                    kept.append(url)
+                    selections.append(candidate)
+                    downloaded = true
+                    break
+                }
+                do {
+                    let raw = try await coordinator.download(candidate)
+                    try Task.checkCancellation()
+                    let data = try SubtitleFileWriter.normalized(raw, format: candidate.format)
+                    try SubtitleFileWriter.save(data, to: url, overwrite: overwrite)
+                    saved.append(url)
+                    selections.append(candidate)
+                    downloaded = true
+                    break
+                } catch {
+                    if Task.isCancelled || error is CancellationError { throw CancellationError() }
+                    lastError = error; formatError = error
+                    diagnostics.append(SubtitleSourceFailure(source: candidate.source, error: error))
+                }
+            }
+            if downloaded && preference != .both { break }
+            if !downloaded {
+                warnings.append("\(format.rawValue.uppercased()): \((formatError ?? report.failures.first?.error ?? SubtitleError.noMatches).localizedDescription)")
+            }
+        }
+        guard !saved.isEmpty || !kept.isEmpty else {
+            if Set(diagnostics.map { $0.source.id }).count > 1 {
+                throw SubtitleProviderError.allSourcesFailed(diagnostics)
+            }
+            throw lastError ?? SubtitleError.noMatches
+        }
+        // An alternate source succeeding is a complete result, not a failed batch.
+        // Preserve source errors separately for future diagnostics UI.
+        return DownloadResult(saved: saved, existing: kept, warnings: preference == .both ? warnings : [],
+                              sourceFailures: diagnostics, selections: selections)
+    }
+
+    private func destination(video: URL, candidate: SubtitleCandidate, renameSubtitle: Bool,
+                             outputDirectory: URL?) -> URL {
+        let directory = outputDirectory ?? video.deletingLastPathComponent()
+        guard !renameSubtitle else {
+            let filename = video.deletingPathExtension().lastPathComponent + "." + candidate.format.rawValue
+            return directory.appendingPathComponent(filename)
+        }
+        let sourceName = URL(fileURLWithPath: candidate.title).lastPathComponent
+        let stem = URL(fileURLWithPath: sourceName).deletingPathExtension().lastPathComponent
+        let safeStem = stem.isEmpty || stem == "." || stem == ".."
+            ? video.deletingPathExtension().lastPathComponent
+            : stem
+        return directory.appendingPathComponent(safeStem)
+            .appendingPathExtension(candidate.format.rawValue)
+    }
+}

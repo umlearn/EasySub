@@ -1,0 +1,24 @@
+name: Build and test
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  macos:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Test Swift core
+        run: swift test
+      - name: Build universal macOS app
+        run: >-
+          xcodebuild -project EasySub.xcodeproj -scheme EasySub
+          -configuration Release -destination 'generic/platform=macOS'
+          -derivedDataPath build CODE_SIGNING_ALLOWED=NO build
+      - name: Check generated project is current
+        run: |
+          python3 Scripts/generate_project.py
+          git diff --exit-code -- EasySub.xcodeproj EasySub.xcworkspace
