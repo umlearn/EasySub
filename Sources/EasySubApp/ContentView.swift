@@ -37,6 +37,7 @@ private enum ContentFocus: Hashable {
 
 struct ContentView: View {
     @Bindable var store: DownloadStore
+    @Environment(\.openWindow) private var openWindow
     @State private var selection = Set<URL>()
     @State private var filter: QueueFilter? = .all
     @State private var search = ""
@@ -96,7 +97,9 @@ struct ContentView: View {
                 }
                 .listStyle(.sidebar)
                 .focused($contentFocus, equals: .sidebar)
-                SettingsLink { Label("Settings", systemImage: "gearshape") }
+                Button { openWindow(id: "settings") } label: {
+                    Label("Settings", systemImage: "gearshape")
+                }
                     .buttonStyle(.borderless)
                     .padding(16)
             }
@@ -114,6 +117,11 @@ struct ContentView: View {
                         Button("Add videos") { selectVideos(store: store) }.buttonStyle(.borderedProminent)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .contextMenu {
+                        Button { selectVideos(store: store) } label: {
+                            Label("Add videos", systemImage: "plus")
+                        }
+                    }
                 } else {
                     Table(visibleItems, selection: $selection) {
                         TableColumn("Video") { item in
@@ -180,20 +188,25 @@ struct ContentView: View {
                         }
                     }
                     .contextMenu {
-                        Button("Search subtitles manually") { showSubtitles = true }
-                            .disabled(store.isRunning || selection.count != 1)
-                        if canMarkSelectionAsPending {
-                            Button("Mark as Pending") { store.mark(selection, as: .ready) }
+                        if selection.isEmpty {
+                            Button { selectVideos(store: store) } label: {
+                                Label("Add videos", systemImage: "plus")
+                            }
+                        } else {
+                            Button("Search subtitles manually") { showSubtitles = true }
+                                .disabled(store.isRunning || selection.count != 1)
+                            if canMarkSelectionAsPending {
+                                Button("Mark as Pending") { store.mark(selection, as: .ready) }
+                                    .disabled(store.isRunning)
+                            }
+                            if canMarkSelectionAsCompleted {
+                                Button("Mark as Completed") { store.mark(selection, as: .completed) }
+                                    .disabled(store.isRunning)
+                            }
+                            Button("Remove selected", role: .destructive) { store.remove(selection); selection.removeAll() }
                                 .disabled(store.isRunning)
+                            Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting(Array(selection)) }
                         }
-                        if canMarkSelectionAsCompleted {
-                            Button("Mark as Completed") { store.mark(selection, as: .completed) }
-                                .disabled(store.isRunning)
-                        }
-                        Button("Remove selected", role: .destructive) { store.remove(selection); selection.removeAll() }
-                            .disabled(selection.isEmpty || store.isRunning)
-                        Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting(Array(selection)) }
-                            .disabled(selection.isEmpty)
                     }
                     .onDeleteCommand { store.remove(selection) }
                 }
@@ -239,6 +252,12 @@ struct ContentView: View {
             }
         }
         .frame(minWidth: 820, minHeight: 520)
+        .contentShape(Rectangle())
+        .contextMenu {
+            Button { selectVideos(store: store) } label: {
+                Label("Add videos", systemImage: "plus")
+            }
+        }
         .background {
             GeometryReader { geometry in
                 Color.clear

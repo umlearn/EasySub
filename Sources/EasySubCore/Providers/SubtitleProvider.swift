@@ -20,6 +20,8 @@ public enum SubtitleMatchKind: String, Sendable {
 public struct SubtitleSearchRequest: Sendable {
     public let video: URL
     public let searchName: String?
+    public let preferredLanguageCodes: [String]
+    public let includesUnpreferredLanguages: Bool
     public var filename: String {
         let value = searchName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return value.isEmpty ? video.lastPathComponent : value
@@ -32,9 +34,12 @@ public struct SubtitleSearchRequest: Sendable {
         guard VideoScanner.extensions.contains(ext) else { return value }
         return (value as NSString).deletingPathExtension
     }
-    public init(video: URL, searchName: String? = nil) {
+    public init(video: URL, searchName: String? = nil, preferredLanguageCodes: [String] = [],
+                includesUnpreferredLanguages: Bool = true) {
         self.video = video
         self.searchName = searchName
+        self.preferredLanguageCodes = SubtitleLanguageCatalog.normalizedPreferences(preferredLanguageCodes)
+        self.includesUnpreferredLanguages = includesUnpreferredLanguages
     }
 }
 
@@ -67,7 +72,7 @@ public struct SubtitleCandidate: Identifiable, Sendable, Equatable {
                 delayMilliseconds: Int? = nil) {
         self.source = source; self.reference = reference; self.title = title
         self.matchingText = matchingText ?? title; self.format = format
-        self.languageCodes = languageCodes; self.matchKind = matchKind
+        self.languageCodes = SubtitleLanguageNormalizer.codes(from: languageCodes); self.matchKind = matchKind
         self.providerScore = providerScore; self.delayMilliseconds = delayMilliseconds
     }
 }

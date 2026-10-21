@@ -29,7 +29,10 @@ public actor AssrtProvider: SubtitleProvider {
                 [String(sub.id), filename ?? "", format.rawValue]), as: UTF8.self)
             let matchingText = [sub.nativeName, sub.videoName, sub.filename, filename]
                 .compactMap { $0 }.joined(separator: " / ")
-            let languages = sub.languageDescription.map { Set([$0]) } ?? []
+            let fileLanguages = filename.map(SubtitleLanguageNormalizer.codes(fromFileName:)) ?? []
+            let languages = fileLanguages.isEmpty
+                ? SubtitleLanguageNormalizer.codes(from: sub.languageDescription.map { [$0] } ?? [])
+                : fileLanguages
             let candidate = SubtitleCandidate(source: source, reference: reference, title: title,
                                               matchingText: matchingText, format: format,
                                               languageCodes: languages)

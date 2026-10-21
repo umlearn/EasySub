@@ -36,7 +36,7 @@ public actor ShooterProvider: SubtitleProvider {
                 guard let format = SubtitleFormat(rawValue: file.ext.lowercased()) else { return nil }
                 return SubtitleCandidate(source: source, reference: file.link.absoluteString,
                                          title: file.link.lastPathComponent, format: format,
-                                         languageCodes: ["zh"], matchKind: .fingerprint,
+                                         languageCodes: ["zh-cn"], matchKind: .fingerprint,
                                          delayMilliseconds: match.delay)
             }
         }

@@ -5,6 +5,7 @@ import UserNotifications
 struct EasySubApp: App {
     @State private var store = DownloadStore()
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
+    @Environment(\.openWindow) private var openWindow
 
     var body: some Scene {
         Window("EasySub", id: "main") {
@@ -17,8 +18,16 @@ struct EasySubApp: App {
                 Button("Add videos") { selectVideos(store: store) }
                     .keyboardShortcut("o")
             }
+            CommandGroup(replacing: .appSettings) {
+                Button("Settings…") { openWindow(id: "settings") }
+                    .keyboardShortcut(",", modifiers: .command)
+            }
         }
-        Settings { SettingsView() }
+        Window("EasySub Settings", id: "settings") {
+            SettingsView()
+        }
+        .defaultSize(width: 580, height: 760)
+        .windowResizability(.contentMinSize)
     }
 }
 

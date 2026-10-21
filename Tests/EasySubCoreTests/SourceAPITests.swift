@@ -47,7 +47,7 @@ private func makeZip(_ files: [String: String]) throws -> Data {
     let results = try await provider.search(.init(video: URL(fileURLWithPath: "/tmp/Movie & Name.mkv")))
     #expect(results.count == 1)
     #expect(results[0].delayMilliseconds == nil)
-    #expect(results[0].languageCodes == ["简体"])
+    #expect(results[0].languageCodes == ["zh-cn"])
     let request = await stub.requests[0]
     #expect(URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems?.first?.value == "Movie & Name")
     #expect(try await provider.download(results[0]) == Data("subtitle".utf8))
@@ -108,7 +108,7 @@ private func makeZip(_ files: [String: String]) throws -> Data {
     #expect(results.count == 1)
     #expect(results[0].delayMilliseconds == nil)
     #expect(results[0].matchingText.contains("Movie.2024.1080p"))
-    #expect(results[0].languageCodes == ["简 双语"])
+    #expect(results[0].languageCodes == ["zh-cn", "ze"])
     #expect(try await provider.download(results[0]) == Data("subtitle".utf8))
     let requests = await stub.requests
     #expect(requests.count == 3)
@@ -119,6 +119,21 @@ private func makeZip(_ files: [String: String]) throws -> Data {
     #expect(requests[1].url?.path == "/v1/sub/detail")
     #expect(requests[2].value(forHTTPHeaderField: "Authorization") == nil)
     #expect(requests.allSatisfy { !$0.url!.absoluteString.contains(token) })
+}
+
+@Test func assrtUsesIndividualFileLanguagesInsteadOfGroupDescription() async throws {
+    let stub = APIStub([
+        #"{"status":0,"sub":{"subs":[{"id":42,"filename":"Movie.zip","lang":{"desc":"英 简 繁 双语"},"filelist":[{"f":"Movie.chs.ass"},{"f":"Movie.cht.ass"},{"f":"Movie.chs&eng.ass"},{"f":"Movie.cht&eng.ass"},{"f":"Movie.idx"}]}]}}"#
+    ])
+    let provider = try AssrtProvider(token: String(repeating: "a", count: 32), transport: stub,
+                                     limiter: AssrtRateLimiter(interval: .zero))
+    let results = try await provider.search(.init(video: URL(fileURLWithPath: "/tmp/Movie.mkv")))
+    #expect(results.map(\.languageCodes) == [
+        ["zh-cn"],
+        ["zh-tw"],
+        ["en", "ze", "zh-cn"],
+        ["en", "ze", "zh-tw"]
+    ])
 }
 
 @Test func assrtRejectsInvalidTokenAndBusinessErrors() async throws {

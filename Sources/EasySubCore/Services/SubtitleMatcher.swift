@@ -2,13 +2,19 @@ import Foundation
 
 /// Deterministic filename heuristics, not a guarantee of synchronized dialogue.
 enum SubtitleMatcher {
-    static func rank(_ candidates: [SubtitleCandidate], for video: URL) -> [SubtitleCandidate] {
-        rank(candidates, forName: video.deletingPathExtension().lastPathComponent)
+    static func rank(_ candidates: [SubtitleCandidate], for video: URL,
+                     preferredLanguageCodes: [String] = [], requirePreferredLanguage: Bool = false) -> [SubtitleCandidate] {
+        rank(candidates, forName: video.deletingPathExtension().lastPathComponent,
+             preferredLanguageCodes: preferredLanguageCodes, requirePreferredLanguage: requirePreferredLanguage)
     }
 
-    static func rank(_ candidates: [SubtitleCandidate], forName name: String) -> [SubtitleCandidate] {
+    static func rank(_ candidates: [SubtitleCandidate], forName name: String,
+                     preferredLanguageCodes: [String] = [], requirePreferredLanguage: Bool = false) -> [SubtitleCandidate] {
         let target = Metadata(name)
-        return candidates.enumerated().compactMap { index, candidate -> (Int, Int, SubtitleCandidate)? in
+        let preferences = SubtitleLanguageCatalog.normalizedPreferences(preferredLanguageCodes)
+        return candidates.enumerated().compactMap { index, candidate -> (Int, Int, Int, SubtitleCandidate)? in
+            let languageIndex = preferences.firstIndex(where: { candidate.languageCodes.contains($0) })
+            if requirePreferredLanguage && !preferences.isEmpty && languageIndex == nil { return nil }
             // Known nonzero offsets need retiming, which this app does not perform.
             guard candidate.delayMilliseconds == nil || candidate.delayMilliseconds == 0 else { return nil }
             let metadata = Metadata(candidate.matchingText)
@@ -37,17 +43,21 @@ enum SubtitleMatcher {
             if !target.episodes.isEmpty && target.episodes == metadata.episodes { score += 100 }
             if target.season != nil && target.season == metadata.season { score += 30 }
             score += versionScore(target: target, candidate: metadata)
-            let language = (candidate.languageCodes.joined(separator: " ") + " " + candidate.title).lowercased()
-            if ["简体", "简中", "chs", "zh-cn"].contains(where: language.contains) { score += 25 }
-            else if ["双语", "bilingual"].contains(where: language.contains) { score += 20 }
-            else if ["繁体", "繁中", "cht", "zh-tw", "zh-hk"].contains(where: language.contains) { score += 12 }
-            else if ["zh", "中文", "chi", "zho"].contains(where: language.contains) { score += 15 }
+            if preferences.isEmpty {
+                if candidate.languageCodes.contains("zh-cn") { score += 25 }
+                else if candidate.languageCodes.contains("ze") { score += 20 }
+                else if candidate.languageCodes.contains("zh-tw") { score += 12 }
+            }
             if candidate.delayMilliseconds == 0 { score += 10 }
             if let providerScore = candidate.providerScore {
                 score += min(20, max(-20, providerScore))
             }
-            return (score, index, candidate)
-        }.sorted { $0.0 == $1.0 ? $0.1 < $1.1 : $0.0 > $1.0 }.map { $0.2 }
+            return (languageIndex ?? Int.max, score, index, candidate)
+        }.sorted {
+            if $0.0 != $1.0 { return $0.0 < $1.0 }
+            if $0.1 != $1.1 { return $0.1 > $1.1 }
+            return $0.2 < $1.2
+        }.map { $0.3 }
     }
 
     private struct Metadata {

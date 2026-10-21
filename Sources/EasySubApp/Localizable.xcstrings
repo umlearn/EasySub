@@ -2266,6 +2266,84 @@
           }
         }
       }
+    },
+    "Subtitle languages": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "字幕语言" } } }
+    },
+    "Preferred subtitle language": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "首选字幕语言" } } }
+    },
+    "Second subtitle language": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "第二字幕语言" } } }
+    },
+    "Third subtitle language": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "第三字幕语言" } } }
+    },
+    "Automatic downloads try languages in this order. Manual search still shows all languages.": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "自动下载按此顺序尝试语言；手动搜索仍会显示全部语言。" } } }
+    },
+    "Drag tags to reorder. Automatic downloads try languages in this order; manual search still shows all languages.": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "拖动标签调整顺序；自动下载按此顺序尝试语言，手动搜索仍会显示全部语言。" } } }
+    },
+    "Drag to change order. Click to choose another language.": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "拖动调整顺序，点击可更换语言。" } } }
+    },
+    "Add another subtitle language.": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "添加另一种字幕语言。" } } }
+    },
+    "Move left": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "左移" } } }
+    },
+    "Move right": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "右移" } } }
+    },
+    "Remove": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "移除" } } }
+    },
+    "Add": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "添加" } } }
+    },
+    "Settings…": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "设置…" } } }
+    },
+    "None": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "无" } } }
+    },
+    "OpenSubtitles (requires API key)": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "OpenSubtitles（需要 API Key）" } } }
+    },
+    "OpenSubtitles API key": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "OpenSubtitles API Key" } } }
+    },
+    "Get API key": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "获取 API Key" } } }
+    },
+    "Provided by opensubtitles.com": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "由 opensubtitles.com 提供" } } }
+    },
+    "Enter an ASSRT token to enable this source.": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "填写 ASSRT Token 后才会启用此来源。" } } }
+    },
+    "input your API key here": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "在此输入 API Key" } } }
+    },
+    "OpenSubtitles · Shooter · Xunlei · ASSRT": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "OpenSubtitles · 射手 · 迅雷 · ASSRT" } } }
+    },
+    "Xunlei · ASSRT · Shooter · OpenSubtitles": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "迅雷 · ASSRT · 射手 · OpenSubtitles" } } }
+    },
+    "%@ requires an API key in Settings.": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "%@ 需要在设置中填写 API Key。" } } }
+    },
+    "%@ rejected the API key.": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "%@ 拒绝了此 API Key。" } } }
+    },
+    "%@ currently requires account authentication for downloads.": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "%@ 当前要求登录账户后才能下载。" } } }
+    },
+    "%@ daily download limit reached.": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "%@ 今日下载额度已用完。" } } }
     }
   },
   "version": "1.0"

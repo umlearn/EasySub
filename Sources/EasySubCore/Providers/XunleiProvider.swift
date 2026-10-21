@@ -50,8 +50,7 @@ public actor XunleiProvider: SubtitleProvider {
     }
     private struct Response: Decodable { let code: Int; let data: [Item]? }
     private static func isSimplifiedChinese(_ candidate: SubtitleCandidate) -> Bool {
-        let value = candidate.languageCodes.joined(separator: " ") + " " + candidate.title
-        return ["简体", "简中", "chs", "zh-cn"].contains { value.localizedCaseInsensitiveContains($0) }
+        candidate.languageCodes.contains("zh-cn")
     }
     private struct Item: Decodable {
         let url: String
@@ -100,12 +99,17 @@ enum XunleiCIDHasher {
 
 public enum SourceAPIError: Error, LocalizedError, Sendable {
     case rejected(String, Int), rateLimited(String), invalidToken, missingFile
+    case missingAPIKey(String), invalidAPIKey(String), accountRequired(String), downloadLimitReached(String)
     public var errorDescription: String? {
         switch self {
         case .rejected(let source, let code): "\(source): API error \(code)"
         case .rateLimited(let source): String(format: String(localized: "%@ request limit reached. Try again in a minute."), source)
         case .invalidToken: String(localized: "Enter a valid 32-character ASSRT token in Settings.")
         case .missingFile: String(localized: "The subtitle file is no longer available. Search again.")
+        case .missingAPIKey(let source): String(format: String(localized: "%@ requires an API key in Settings."), source)
+        case .invalidAPIKey(let source): String(format: String(localized: "%@ rejected the API key."), source)
+        case .accountRequired(let source): String(format: String(localized: "%@ currently requires account authentication for downloads."), source)
+        case .downloadLimitReached(let source): String(format: String(localized: "%@ daily download limit reached."), source)
         }
     }
 }

@@ -20,6 +20,21 @@ private struct ProviderFiles {
 private let assData = Data("[Script Info]\nScriptType: v4.00+\n[Events]\nDialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,Hello\n".utf8)
 private let srtData = Data("1\n00:00:01,000 --> 00:00:02,000\nHello\n".utf8)
 
+@Test func subtitleLanguageLabelsUseChineseForChineseAndAppLocaleForOthers() {
+    let english = Locale(identifier: "en")
+    let chinese = Locale(identifier: "zh-Hans")
+    #expect(SubtitleLanguageCatalog.displayName(for: "zh-cn", in: english) == "简体中文")
+    #expect(SubtitleLanguageCatalog.displayName(for: "zh-tw", in: english) == "繁体中文")
+    #expect(SubtitleLanguageCatalog.displayName(for: "ze", in: english) == "双语字幕")
+    #expect(SubtitleLanguageCatalog.displayName(for: "en", in: english) == "English")
+    #expect(SubtitleLanguageCatalog.displayName(for: "en", in: chinese) == "英语")
+    #expect(SubtitleLanguageCatalog.displayLabel(
+        for: ["zh-cn", "en", "ze"], in: english
+    ) == "简体中文 + 英语 + 双语字幕")
+    #expect(SubtitleLanguageCatalog.displayLabel(for: ["en", "ja"], in: english)
+            == "English + Japanese")
+}
+
 private actor SearchProbe {
     var active = 0
     var peak = 0
@@ -152,14 +167,33 @@ private actor TestProvider: SubtitleProvider {
     #expect(await provider.downloads == ["bad"])
 }
 
-@Test func searchConcurrencyIsBoundedAndOrderIsDeterministic() async throws {
+@Test func allSourcesForOneVideoSearchConcurrentlyAndOrderIsDeterministic() async throws {
     let files = try ProviderFiles(); defer { files.cleanup() }
     let probe = SearchProbe()
     let providers = (0..<5).map { TestProvider("\($0)", delay: .milliseconds($0 == 0 ? 100 : 20), probe: probe) }
     let coordinator = try SubtitleSearchCoordinator(providers: providers)
     let result = try await coordinator.search(SubtitleSearchRequest(video: files.video))
-    #expect(await probe.peak == 2)
+    #expect(await probe.peak == 5)
     #expect(result.candidates.map(\.source.id) == ["0", "1", "2", "3", "4"])
+}
+
+@Test func searchesAcrossVideosRespectGlobalConcurrencyLimit() async throws {
+    let files = try ProviderFiles(); defer { files.cleanup() }
+    let probe = SearchProbe()
+    let limiter = SubtitleSearchLimiter(limit: 8)
+    let providers = (0..<4).map { TestProvider("\($0)", delay: .milliseconds(50), probe: probe) }
+    let coordinator = try SubtitleSearchCoordinator(providers: providers, searchLimiter: limiter)
+
+    try await withThrowingTaskGroup(of: Void.self) { group in
+        for _ in 0..<3 {
+            group.addTask {
+                _ = try await coordinator.search(SubtitleSearchRequest(video: files.video))
+            }
+        }
+        try await group.waitForAll()
+    }
+
+    #expect(await probe.peak == 8)
 }
 
 @Test func foreignCandidateCannotBeRoutedToAnotherProvider() async throws {
@@ -320,6 +354,56 @@ private actor TestProvider: SubtitleProvider {
     #expect(SubtitleMatcher.rank(candidates, for: video).first?.reference == "release")
 }
 
+@Test func automaticDownloadPrioritizesLanguageBeforeFormat() async throws {
+    let files = try ProviderFiles(); defer { files.cleanup() }
+    let source = SubtitleSource(id: "language", name: "language")
+    let candidates = [
+        SubtitleCandidate(source: source, reference: "english-ass", title: "video.en.ass",
+                          format: .ass, languageCodes: ["en"]),
+        SubtitleCandidate(source: source, reference: "chinese-srt", title: "video.zh-cn.srt",
+                          format: .srt, languageCodes: ["zh-cn"])
+    ]
+    let provider = TestProvider("language", candidates: candidates,
+                                payloads: ["english-ass": assData, "chinese-srt": srtData])
+    let service = MultiSourceSubtitleService(provider: provider, preferredLanguageCodes: ["zh-cn", "en"])
+    let result = try await service.download(video: files.video, preference: .ass, overwrite: false)
+    #expect(result.selections.map(\.reference) == ["chinese-srt"])
+    #expect(result.saved == [files.output(.srt)])
+}
+
+@Test func bothFormatsDoNotMixPreferredLanguages() async throws {
+    let files = try ProviderFiles(); defer { files.cleanup() }
+    let source = SubtitleSource(id: "language", name: "language")
+    let candidates = [
+        SubtitleCandidate(source: source, reference: "chinese-srt", title: "video.zh-cn.srt",
+                          format: .srt, languageCodes: ["zh-cn"]),
+        SubtitleCandidate(source: source, reference: "english-ass", title: "video.en.ass",
+                          format: .ass, languageCodes: ["en"])
+    ]
+    let provider = TestProvider("language", candidates: candidates,
+                                payloads: ["english-ass": assData, "chinese-srt": srtData])
+    let service = MultiSourceSubtitleService(provider: provider, preferredLanguageCodes: ["zh-cn", "en"])
+    let result = try await service.download(video: files.video, preference: .both, overwrite: false)
+    #expect(result.selections.map(\.reference) == ["chinese-srt"])
+    #expect(result.saved == [files.output(.srt)])
+    #expect(result.warnings.count == 1)
+}
+
+@Test func manualSelectionKeepsOtherLanguagesAfterPreferredResults() async throws {
+    let files = try ProviderFiles(); defer { files.cleanup() }
+    let source = SubtitleSource(id: "language", name: "language")
+    let candidates = [
+        SubtitleCandidate(source: source, reference: "english", title: "video.en.srt",
+                          format: .srt, languageCodes: ["en"]),
+        SubtitleCandidate(source: source, reference: "chinese", title: "video.zh-cn.srt",
+                          format: .srt, languageCodes: ["zh-cn"])
+    ]
+    let service = MultiSourceSubtitleService(provider: TestProvider("language", candidates: candidates),
+                                             preferredLanguageCodes: ["zh-cn"])
+    let result = try await service.searchForSelection(.init(video: files.video))
+    #expect(result.candidates.map(\.reference) == ["chinese", "english"])
+}
+
 @Test func selectionSearchRanksSafeMatchesButRetainsManualCandidates() async throws {
     let files = try ProviderFiles(); defer { files.cleanup() }
     let video = files.directory.appendingPathComponent("Movie.2024.1080p.mkv")
@@ -346,19 +430,19 @@ private actor TestProvider: SubtitleProvider {
     let files = try ProviderFiles(); defer { files.cleanup() }
     let first = TestProvider("first", delay: .seconds(10))
     let second = TestProvider("second", delay: .seconds(10))
-    let third = TestProvider("third")
+    let third = TestProvider("third", delay: .seconds(10))
     let service = try MultiSourceSubtitleService(providers: [first, second, third])
     let task = Task { try await service.download(video: files.video, preference: .ass, overwrite: false) }
     // Wait for a concrete start signal, with a bounded wait, rather than cancelling by timing luck.
     for _ in 0..<200 {
-        if await first.searches == 1, await second.searches == 1 { break }
+        if await first.searches == 1, await second.searches == 1, await third.searches == 1 { break }
         try await Task.sleep(for: .milliseconds(5))
     }
     task.cancel()
     await #expect(throws: CancellationError.self) { try await task.value }
     #expect(await first.cancellations == 1)
     #expect(await second.cancellations == 1)
-    #expect(await third.searches == 0)
+    #expect(await third.cancellations == 1)
     #expect(await first.downloads.isEmpty)
     #expect(!FileManager.default.fileExists(atPath: files.output(.ass).path))
 }

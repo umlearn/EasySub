@@ -87,7 +87,7 @@ public final class DownloadStore {
         }
         let service = override ?? service
         batch = Task {
-            // Two workers keep the UI responsive and avoid flooding the legacy service.
+            // Two video workers keep file work responsive; source searches also share a process-wide cap.
             await withTaskGroup(of: Outcome.self) { group in
                 var iterator = videos.makeIterator()
                 @MainActor func enqueue(_ video: VideoFile) {

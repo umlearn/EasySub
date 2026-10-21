@@ -14,6 +14,7 @@ struct SubtitlePickerView: View {
     let height: CGFloat
     var onSaved: (URL, SubtitleCandidate) -> Void = { _, _ in }
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.locale) private var locale
     @State private var candidates: [SubtitleCandidate] = []
     @State private var selection: SubtitleCandidate.ID?
     @State private var service: MultiSourceSubtitleService?
@@ -142,7 +143,7 @@ struct SubtitlePickerView: View {
     private func metadata(for candidate: SubtitleCandidate) -> String {
         var parts = [candidate.source.name, candidate.format.rawValue.uppercased()]
         if !candidate.languageCodes.isEmpty {
-            parts.append(candidate.languageCodes.sorted().joined(separator: ", "))
+            parts.append(SubtitleLanguageCatalog.displayLabel(for: candidate.languageCodes, in: locale))
         }
         if candidate.matchKind == .fingerprint {
             parts.append(String(localized: "Fingerprint match"))
