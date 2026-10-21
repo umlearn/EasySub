@@ -64,6 +64,13 @@ struct ContentView: View {
         return store.items.first { selection.contains($0.id) }
     }
 
+    private var completedSelectedItem: DownloadItem? {
+        guard let item = selectedItem,
+              item.status == .completed,
+              !item.detail.isEmpty else { return nil }
+        return item
+    }
+
     var body: some View {
         NavigationSplitView {
             VStack(alignment: .leading, spacing: 20) {
@@ -71,7 +78,7 @@ struct ContentView: View {
                     Image("EasySubMark")
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 42, height: 42)
+                        .frame(width: 48, height: 48)
                         .accessibilityHidden(true)
                     VStack(alignment: .leading) {
                         Text(verbatim: "EasySub").font(.headline)
@@ -129,9 +136,51 @@ struct ContentView: View {
                         }.width(140)
                     }
                     .focused($contentFocus, equals: .videos)
+                    .overlay(alignment: .bottomLeading) {
+                        if let item = completedSelectedItem {
+                            HStack(spacing: 8) {
+                                ViewThatFits(in: .horizontal) {
+                                    Text(item.detail)
+                                        .fixedSize()
+                                    Text(item.detail)
+                                        .lineLimit(3)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                        .frame(maxWidth: 520, alignment: .leading)
+                                }
+                                .font(.caption)
+                                .foregroundStyle(.primary.opacity(0.75))
+                                .textSelection(.enabled)
+                                .help(item.detail)
+
+                                Divider()
+                                    .frame(height: 16)
+                                    .padding(.horizontal, 6)
+
+                                HoverIconButton(title: "Show in Finder", systemImage: "folder") {
+                                    NSWorkspace.shared.activateFileViewerSelecting([item.video.url])
+                                }
+
+                                HoverIconButton(title: "Search subtitles manually", systemImage: "magnifyingglass") {
+                                    showSubtitles = true
+                                }
+                                .disabled(store.isRunning)
+                            }
+                            .controlSize(.small)
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 6)
+                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                    .strokeBorder(.primary.opacity(0.08), lineWidth: 1)
+                            }
+                            .shadow(color: .black.opacity(0.09), radius: 4, y: 2)
+                            .padding(14)
+                        }
+                    }
                     .contextMenu {
-                        Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting(Array(selection)) }
-                            .disabled(selection.isEmpty)
+                        Button("Search subtitles manually") { showSubtitles = true }
+                            .disabled(store.isRunning || selection.count != 1)
                         if canMarkSelectionAsPending {
                             Button("Mark as Pending") { store.mark(selection, as: .ready) }
                                 .disabled(store.isRunning)
@@ -142,26 +191,10 @@ struct ContentView: View {
                         }
                         Button("Remove selected", role: .destructive) { store.remove(selection); selection.removeAll() }
                             .disabled(selection.isEmpty || store.isRunning)
+                        Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting(Array(selection)) }
+                            .disabled(selection.isEmpty)
                     }
                     .onDeleteCommand { store.remove(selection) }
-                    if let item = store.items.first(where: { selection.contains($0.id) }) {
-                        Divider()
-                        VStack(alignment: .leading, spacing: 8) {
-                            if !item.detail.isEmpty {
-                                ScrollView {
-                                    Text(item.detail).font(.callout).textSelection(.enabled)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                }
-                            }
-                            Button("Search and select subtitles") { showSubtitles = true }
-                                .disabled(store.isRunning || selection.count != 1)
-                                .help(selection.count > 1
-                                    ? LocalizedStringKey("Select one video to search for subtitles")
-                                    : LocalizedStringKey("Search subtitle sources for the selected video"))
-                        }
-                        .padding(14)
-                        .frame(maxHeight: 140)
-                    }
                 }
                 Divider()
                 footer
@@ -371,6 +404,32 @@ struct ContentView: View {
             return item.status == .ready || item.status == .cancelled
                 || item.status == .failed || item.status == .partial
         }
+    }
+}
+
+private struct HoverIconButton: View {
+    let title: LocalizedStringKey
+    let systemImage: String
+    let action: () -> Void
+
+    @Environment(\.isEnabled) private var isEnabled
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .frame(width: 22, height: 22)
+                .contentShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                .background {
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .fill(isHovering && isEnabled ? Color.primary.opacity(0.09) : .clear)
+                }
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(isEnabled ? .secondary : .tertiary)
+        .onHover { isHovering = $0 }
+        .animation(.easeOut(duration: 0.12), value: isHovering)
+        .help(Text(title))
     }
 }
 

@@ -1859,6 +1859,23 @@
         }
       }
     },
+    "Search subtitles manually": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search subtitles manually"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手动搜索字幕"
+          }
+        }
+      }
+    },
     "Search and select subtitles": {
       "extractionState": "manual",
       "localizations": {
