@@ -281,7 +281,7 @@ struct ContentView: View {
                     overwrite: overwrite,
                     renameSubtitle: renameSubtitles,
                     outputDirectory: configuredOutputDirectory,
-                    preferredCandidateIDs: Set(item.selectedCandidates.map(\.id)),
+                    downloadedCandidates: item.downloadedCandidates,
                     width: min(880, max(520, contentWidth - 40)),
                     height: min(620, max(420, contentHeight - 40))
                 ) { output, candidate in

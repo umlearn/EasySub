@@ -13,6 +13,7 @@ public struct DownloadItem: Identifiable, Sendable {
     public var detail = ""
     public var output: [URL] = []
     public var selectedCandidates: [SubtitleCandidate] = []
+    public var downloadedCandidates: [SubtitleCandidate.ID: URL] = [:]
 }
 
 @MainActor @Observable
@@ -82,6 +83,7 @@ public final class DownloadStore {
             items[index].status = .queued
             items[index].detail = ""
             items[index].selectedCandidates = []
+            items[index].downloadedCandidates = [:]
         }
         let service = override ?? service
         batch = Task {
@@ -127,10 +129,16 @@ public final class DownloadStore {
         guard !isRunning else { return }
         guard let index = items.firstIndex(where: { $0.id == video }) else { return }
         items[index].status = .completed
+        let replacedCandidateIDs = Set(items[index].downloadedCandidates.compactMap { id, existingOutput in
+            existingOutput.standardizedFileURL == output.standardizedFileURL ? id : nil
+        })
+        items[index].selectedCandidates.removeAll { replacedCandidateIDs.contains($0.id) }
+        for id in replacedCandidateIDs { items[index].downloadedCandidates[id] = nil }
         if !items[index].output.contains(output) { items[index].output.append(output) }
         if !items[index].selectedCandidates.contains(where: { $0.id == candidate.id }) {
             items[index].selectedCandidates.append(candidate)
         }
+        items[index].downloadedCandidates[candidate.id] = output
         var lines = items[index].output.map { String(localized: "Saved") + ": " + $0.lastPathComponent }
         lines += items[index].selectedCandidates.map { savedCandidate in
             let evidence = savedCandidate.matchKind == .fingerprint ? " · " + String(localized: "Fingerprint match") : ""
@@ -149,6 +157,7 @@ public final class DownloadStore {
             items[index].status = result.warnings.isEmpty ? .completed : .partial
             items[index].output = result.saved + result.existing
             items[index].selectedCandidates = result.selections
+            items[index].downloadedCandidates = candidateFiles(result.selections, outputs: items[index].output)
             var lines = result.saved.map { String(localized: "Saved") + ": " + $0.lastPathComponent }
             lines += result.existing.map { String(localized: "Kept existing") + ": " + $0.lastPathComponent }
             lines += result.selections.map { candidate in
@@ -161,6 +170,18 @@ public final class DownloadStore {
             items[index].status = outcome.cancelled ? .cancelled : .failed
             items[index].detail = outcome.cancelled ? String(localized: "Download cancelled.") : (outcome.error ?? "")
         }
+    }
+
+    private func candidateFiles(_ candidates: [SubtitleCandidate], outputs: [URL]) -> [SubtitleCandidate.ID: URL] {
+        var remaining = outputs
+        var files: [SubtitleCandidate.ID: URL] = [:]
+        for candidate in candidates {
+            guard let index = remaining.firstIndex(where: {
+                $0.pathExtension.caseInsensitiveCompare(candidate.format.rawValue) == .orderedSame
+            }) else { continue }
+            files[candidate.id] = remaining.remove(at: index)
+        }
+        return files
     }
 }
 

@@ -276,6 +276,24 @@ private actor SlowDownloader: SubtitleDownloading {
     store.recordManualDownload(video: video, output: secondOutput, candidate: second)
     #expect(store.items.first?.output == [firstOutput, secondOutput])
     #expect(store.items.first?.selectedCandidates.map(\.id) == [first.id, second.id])
+    #expect(store.items.first?.downloadedCandidates == [first.id: firstOutput, second.id: secondOutput])
+}
+
+@MainActor @Test func replacingManualDownloadTransfersDownloadedState() async throws {
+    let fixture = try Fixture(); defer { fixture.cleanup() }
+    let video = try fixture.video()
+    let store = DownloadStore(service: SlowDownloader())
+    await store.add([video])
+    let source = SubtitleSource(id: "manual", name: "Manual")
+    let first = SubtitleCandidate(source: source, reference: "one", title: "One", format: .srt)
+    let replacement = SubtitleCandidate(source: source, reference: "two", title: "Two", format: .srt)
+    let output = video.deletingPathExtension().appendingPathExtension("srt")
+
+    store.recordManualDownload(video: video, output: output, candidate: first)
+    store.recordManualDownload(video: video, output: output, candidate: replacement)
+
+    #expect(store.items.first?.selectedCandidates.map(\.id) == [replacement.id])
+    #expect(store.items.first?.downloadedCandidates == [replacement.id: output])
 }
 
 @Test func fingerprintUsesLegacyIntegerDivisionOffsets() throws {

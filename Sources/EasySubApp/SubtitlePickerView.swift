@@ -9,7 +9,7 @@ struct SubtitlePickerView: View {
     let overwrite: Bool
     let renameSubtitle: Bool
     let outputDirectory: URL?
-    let preferredCandidateIDs: Set<SubtitleCandidate.ID>
+    let downloadedCandidates: [SubtitleCandidate.ID: URL]
     let width: CGFloat
     let height: CGFloat
     var onSaved: (URL, SubtitleCandidate) -> Void = { _, _ in }
@@ -105,6 +105,7 @@ struct SubtitlePickerView: View {
         // falling back to the text field and selecting its entire value.
         .defaultFocus($focusedTarget, .close)
         .task {
+            downloaded = downloadedCandidates
             if searchText.isEmpty { searchText = video.lastPathComponent }
             beginSearch()
         }
@@ -169,7 +170,7 @@ struct SubtitlePickerView: View {
                 guard operationID == id, !Task.isCancelled else { return }
                 service = engine
                 candidates = report.candidates
-                let initialSelection = candidates.first(where: { preferredCandidateIDs.contains($0.id) })?.id
+                let initialSelection = candidates.first(where: { downloaded[$0.id] != nil })?.id
                     ?? candidates.first?.id
                 // Let List install its rows before it becomes first responder. Selecting only
                 // after focus lands avoids the transient inactive (gray) selection appearance.
@@ -207,6 +208,7 @@ struct SubtitlePickerView: View {
                                                      renameSubtitle: renameSubtitle,
                                                      outputDirectory: outputDirectory)
                 guard operationID == id, !Task.isCancelled else { return }
+                downloaded = downloaded.filter { $0.value.standardizedFileURL != url.standardizedFileURL }
                 downloaded[candidate.id] = url
                 onSaved(url, candidate)
             } catch {
