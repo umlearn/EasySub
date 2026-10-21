@@ -118,13 +118,17 @@ struct SettingsView: View {
             }
             Section("About") {
                 VStack(alignment: .leading, spacing: 6) {
-                    LabeledContent("Version", value: "1.0.0")
+                    LabeledContent("Version", value: appVersion)
                     Text("Shooter · Xunlei · ASSRT")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Link("Source code & credits", destination: URL(string: "https://github.com/umlearn/EasySub")!)
             }
         }.formStyle(.grouped).frame(width: 580, height: 760)
+    }
+
+    private var appVersion: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
     }
 
     private var outputDirectorySelection: Binding<String> {
