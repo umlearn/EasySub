@@ -45,6 +45,7 @@ struct ContentView: View {
     @State private var configurationError: String?
     @State private var isDropTarget = false
     @State private var contentWidth: CGFloat = 820
+    @State private var contentHeight: CGFloat = 520
     @FocusState private var searchIsFocused: Bool
     @FocusState private var contentFocus: ContentFocus?
     @AppStorage("SZSubTypeKey") private var preference = SubtitlePreference.ass.rawValue
@@ -241,9 +242,13 @@ struct ContentView: View {
         .background {
             GeometryReader { geometry in
                 Color.clear
-                    .onAppear { contentWidth = geometry.size.width }
-                    .onChange(of: geometry.size.width) { _, newWidth in
-                        contentWidth = newWidth
+                    .onAppear {
+                        contentWidth = geometry.size.width
+                        contentHeight = geometry.size.height
+                    }
+                    .onChange(of: geometry.size) { _, newSize in
+                        contentWidth = newSize.width
+                        contentHeight = newSize.height
                     }
             }
         }
@@ -277,7 +282,8 @@ struct ContentView: View {
                     renameSubtitle: renameSubtitles,
                     outputDirectory: configuredOutputDirectory,
                     preferredCandidateIDs: Set(item.selectedCandidates.map(\.id)),
-                    width: min(880, max(520, contentWidth - 40))
+                    width: min(880, max(520, contentWidth - 40)),
+                    height: min(620, max(420, contentHeight - 40))
                 ) { output, candidate in
                     store.recordManualDownload(video: item.video.url, output: output, candidate: candidate)
                 }

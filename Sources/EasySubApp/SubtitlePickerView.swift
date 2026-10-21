@@ -11,6 +11,7 @@ struct SubtitlePickerView: View {
     let outputDirectory: URL?
     let preferredCandidateIDs: Set<SubtitleCandidate.ID>
     let width: CGFloat
+    let height: CGFloat
     var onSaved: (URL, SubtitleCandidate) -> Void = { _, _ in }
     @Environment(\.dismiss) private var dismiss
     @State private var candidates: [SubtitleCandidate] = []
@@ -98,7 +99,7 @@ struct SubtitlePickerView: View {
             .frame(height: 44)
             .background(.bar)
         }
-        .frame(width: width, height: 620)
+        .frame(width: width, height: height)
         // The list has no rows while the initial search is running, so it cannot accept
         // default focus yet. Use the always-present close button to prevent AppKit from
         // falling back to the text field and selecting its entire value.
