@@ -1,5 +1,5 @@
 <p align="center">
-  <img width="180" src="EasySub/Images.xcassets/EasySubMark.imageset/EasySubMark@3x.png" alt="EasySub">
+  <img width="180" src="Docs/Images/EasySub-AppIcon.png" alt="EasySub 应用图标">
 </p>
 
 <p align="center">
@@ -67,7 +67,7 @@ xcodebuild -project EasySub.xcodeproj -scheme EasySub \
 
 默认启用迅雷字幕来源。ASSRT 需要在“设置 → 字幕来源”中启用并填写自己的 Token；Shooter 依赖视频文件指纹，适合查找特定旧版视频，但当前匹配率较低，因此默认关闭。
 
-如果自动匹配不够可靠，可以选择单个视频并点击“搜索并选择字幕”，检查候选结果后再下载。
+如果自动匹配不够可靠，可以右键单个视频并选择“手动搜索字幕”，检查候选结果后再下载。
 
 ## 📚 文档
 
