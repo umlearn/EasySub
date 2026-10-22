@@ -177,6 +177,46 @@ private actor TestProvider: SubtitleProvider {
     #expect(result.candidates.map(\.source.id) == ["0", "1", "2", "3", "4"])
 }
 
+@Test func seriesEpisodesPreferTheFirstSuccessfulSourceAndFormat() async throws {
+    let files = try ProviderFiles(); defer { files.cleanup() }
+    let episode1 = files.directory.appendingPathComponent("Example.Show.S01E01.mkv")
+    let episode2 = files.directory.appendingPathComponent("Example.Show.S01E02.mkv")
+    try Data(repeating: 0, count: 16384).write(to: episode1)
+    try Data(repeating: 0, count: 16384).write(to: episode2)
+
+    let sourceA = SubtitleSource(id: "a", name: "a")
+    let sourceB = SubtitleSource(id: "b", name: "b")
+    let providerA = TestProvider("a", candidates: [
+        SubtitleCandidate(source: sourceA, reference: "a1", title: "Example.Show.S01E01.ass",
+                          format: .ass, providerScore: 20),
+        SubtitleCandidate(source: sourceA, reference: "a2-srt", title: "Example.Show.S01E02.srt",
+                          format: .srt, providerScore: -20),
+        SubtitleCandidate(source: sourceA, reference: "a2-ass", title: "Example.Show.S01E02.ass",
+                          format: .ass, providerScore: 20)
+    ])
+    let providerB = TestProvider("b", candidates: [
+        SubtitleCandidate(source: sourceB, reference: "b2", title: "Example.Show.S01E02.ass",
+                          format: .ass, providerScore: 20)
+    ])
+    let service = try MultiSourceSubtitleService(providers: [providerA, providerB])
+
+    let first = try await service.download(video: episode1, preference: .srt, overwrite: false)
+    let second = try await service.download(video: episode2, preference: .srt, overwrite: false)
+
+    #expect(first.selections.first?.source.id == "a")
+    #expect(first.selections.first?.format == .ass)
+    #expect(second.selections.first?.source.id == "a")
+    #expect(second.selections.first?.format == .srt)
+}
+
+@Test func seriesKeyGroupsEpisodesByTitleAndSeason() {
+    #expect(SubtitleMatcher.seriesKey(for: URL(fileURLWithPath: "/A/Example.Show.S01E01.mkv")) ==
+            SubtitleMatcher.seriesKey(for: URL(fileURLWithPath: "/B/Example Show S01E12.mp4")))
+    #expect(SubtitleMatcher.seriesKey(for: URL(fileURLWithPath: "/A/Example.Show.S01E01.mkv")) !=
+            SubtitleMatcher.seriesKey(for: URL(fileURLWithPath: "/A/Example.Show.S02E01.mkv")))
+    #expect(SubtitleMatcher.seriesKey(for: URL(fileURLWithPath: "/A/Movie.2026.mkv")) == nil)
+}
+
 @Test func searchesAcrossVideosRespectGlobalConcurrencyLimit() async throws {
     let files = try ProviderFiles(); defer { files.cleanup() }
     let probe = SearchProbe()

@@ -87,10 +87,26 @@ public final class DownloadStore {
         }
         let service = override ?? service
         batch = Task {
-            // Two video workers keep file work responsive; source searches also share a process-wide cap.
+            // Start one episode per series first so it can establish source/format affinity. Once
+            // that episode completes, the rest of the season can fill all available worker slots.
             await withTaskGroup(of: Outcome.self) { group in
-                var iterator = videos.makeIterator()
+                let seriesKeys = Dictionary(uniqueKeysWithValues: videos.map {
+                    ($0.id, SubtitleMatcher.seriesKey(for: $0.url))
+                })
+                var seenSeries = Set<String>()
+                var ready: [VideoFile] = []
+                var waitingBySeries: [String: [VideoFile]] = [:]
+                for video in videos {
+                    if let key = seriesKeys[video.id] ?? nil {
+                        if seenSeries.insert(key).inserted { ready.append(video) }
+                        else { waitingBySeries[key, default: []].append(video) }
+                    } else {
+                        ready.append(video)
+                    }
+                }
+                var active = 0
                 @MainActor func enqueue(_ video: VideoFile) {
+                    active += 1
                     setStatus(video.id, .downloading)
                     group.addTask {
                         do {
@@ -106,11 +122,21 @@ public final class DownloadStore {
                         }
                     }
                 }
-                for _ in 0..<2 { if let video = iterator.next() { enqueue(video) } }
+                @MainActor func fillWorkers() {
+                    while active < 8, !ready.isEmpty, !Task.isCancelled {
+                        enqueue(ready.removeFirst())
+                    }
+                }
+                fillWorkers()
                 while let outcome = await group.next() {
+                    active -= 1
                     apply(outcome)
                     batchFinished += 1
-                    if !Task.isCancelled, let video = iterator.next() { enqueue(video) }
+                    if let key = seriesKeys[outcome.id] ?? nil,
+                       let waiting = waitingBySeries.removeValue(forKey: key) {
+                        ready.append(contentsOf: waiting)
+                    }
+                    fillWorkers()
                 }
             }
             for index in items.indices where ids.contains(items[index].id) && items[index].status == .queued {

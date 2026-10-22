@@ -20,7 +20,7 @@
       <li>OpenSubtitles API Key 可从 <a href="https://www.opensubtitles.com/consumers">Consumers 页面</a>获取。Key 不写入 URL、日志或下载请求。</li>
       <li>ASSRT Token 可从 <a href="https://assrt.net/usercp.php">用户面板</a>获取。Token 保存在应用偏好，不访问钥匙串。</li>
       <li>最多设置三种字幕语言。自动下载先锁定最高可用语言，再按 ASS/SRT 偏好选择。</li>
-      <li>批量下载会搜索全部已启用来源；年份或季集冲突会被排除，证据不足的结果保留给手动选择。</li>
+      <li>批量下载最多同时处理 8 个视频并搜索全部已启用来源；同一季会先用首集建立来源偏好，再并发处理其余集数。用户选择的 ASS/SRT 顺序始终优先，每种格式会分别沿用来源；缺少候选时自动回退。年份或季集冲突会被排除，证据不足的结果保留给手动选择。</li>
       <li>关闭覆盖时，同格式的后续字幕会保存为 <code>影片名.1.srt</code>、<code>影片名.2.srt</code> 等。</li>
     </ol></article>
     <article><h2>匹配与隐私</h2><ul>

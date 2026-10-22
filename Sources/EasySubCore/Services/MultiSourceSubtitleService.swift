@@ -3,8 +3,14 @@ import Foundation
 /// Application-facing service. Candidates are ranked across all sources before downloading.
 /// Language priority spans all sources before format preference is considered.
 public actor MultiSourceSubtitleService: SubtitleDownloading {
+    private struct SeriesAffinity: Sendable {
+        var sourceByFormat: [SubtitleFormat: String]
+        let primarySourceID: String
+    }
+
     private let coordinator: SubtitleSearchCoordinator
     private let preferredLanguageCodes: [String]
+    private var seriesAffinities: [String: SeriesAffinity] = [:]
 
     public init(preferredLanguageCodes: [String] = []) {
         coordinator = SubtitleSearchCoordinator(provider: ShooterProvider())
@@ -76,6 +82,8 @@ public actor MultiSourceSubtitleService: SubtitleDownloading {
     public func download(video: URL, preference: SubtitlePreference, overwrite: Bool,
                          renameSubtitle: Bool, outputDirectory: URL?) async throws -> DownloadResult {
         try Task.checkCancellation()
+        let seriesKey = SubtitleMatcher.seriesKey(for: video)
+        let affinity = seriesKey.flatMap { seriesAffinities[$0] }
         let formats: [SubtitleFormat] = preference == .srt ? [.srt, .ass] : [.ass, .srt]
         func renamedDestination(_ format: SubtitleFormat) -> URL {
             let filename = video.deletingPathExtension().lastPathComponent + "." + format.rawValue
@@ -121,7 +129,13 @@ public actor MultiSourceSubtitleService: SubtitleDownloading {
                 }
                 var downloaded = false
                 var formatError: (any Error)?
-                for candidate in candidates where candidate.format == format {
+                let preferredSourceID = affinity?.sourceByFormat[format] ?? affinity?.primarySourceID
+                let formatCandidates = candidates.enumerated().filter { $0.element.format == format }.sorted {
+                    let left = $0.element.source.id == preferredSourceID ? 0 : 1
+                    let right = $1.element.source.id == preferredSourceID ? 0 : 1
+                    return left == right ? $0.offset < $1.offset : left < right
+                }.map(\.element)
+                for candidate in formatCandidates {
                     let url = destination(video: video, candidate: candidate, renameSubtitle: renameSubtitle,
                                           outputDirectory: outputDirectory)
                     if !overwrite, FileManager.default.fileExists(atPath: url.path) {
@@ -145,6 +159,15 @@ public actor MultiSourceSubtitleService: SubtitleDownloading {
                 }
             }
             if !saved.isEmpty || !kept.isEmpty {
+                if let seriesKey, let first = selections.first {
+                    var current = seriesAffinities[seriesKey] ?? SeriesAffinity(
+                        sourceByFormat: [:], primarySourceID: first.source.id
+                    )
+                    for selection in selections where current.sourceByFormat[selection.format] == nil {
+                        current.sourceByFormat[selection.format] = selection.source.id
+                    }
+                    seriesAffinities[seriesKey] = current
+                }
                 return DownloadResult(saved: saved, existing: kept,
                                       warnings: preference == .both ? warnings : [],
                                       sourceFailures: diagnostics, selections: selections)

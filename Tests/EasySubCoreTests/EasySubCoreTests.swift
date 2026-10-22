@@ -198,24 +198,56 @@ private actor SlowDownloader: SubtitleDownloading {
     }
 }
 
+private actor SeriesGateDownloader: SubtitleDownloading {
+    var calls: [String] = []
+    var active = 0
+    var peak = 0
+    func download(video: URL, preference: SubtitlePreference, overwrite: Bool,
+                  renameSubtitle: Bool, outputDirectory: URL?) async throws -> DownloadResult {
+        calls.append(video.lastPathComponent)
+        active += 1
+        peak = max(peak, active)
+        defer { active -= 1 }
+        try await Task.sleep(for: calls.count == 1 ? .milliseconds(100) : .milliseconds(30))
+        return DownloadResult(saved: [video.appendingPathExtension("ass")])
+    }
+}
+
 @MainActor @Test func queueBoundsConcurrencyAndPreventsRepeatedStart() async throws {
     let fixture = try Fixture(); defer { fixture.cleanup() }
-    let urls = try (0..<5).map { try fixture.video("\($0).mkv") }
+    let urls = try (0..<12).map { try fixture.video("\($0).mkv") }
     let service = SlowDownloader()
     let store = DownloadStore(service: service)
     await store.add(urls)
     await store.add(urls)
-    #expect(store.items.count == 5)
+    #expect(store.items.count == 12)
     store.start(preference: .ass, overwrite: false)
     store.start(preference: .srt, overwrite: true)
     store.remove(Set(urls))
-    #expect(store.items.count == 5)
+    #expect(store.items.count == 12)
     while store.isRunning { try await Task.sleep(for: .milliseconds(20)) }
-    #expect(await service.calls == 5)
-    #expect(await service.peak == 2)
-    #expect(store.batchFinished == 5)
-    #expect(store.successCount == 5)
+    #expect(await service.calls == 12)
+    #expect(await service.peak == 8)
+    #expect(store.batchFinished == 12)
+    #expect(store.successCount == 12)
     #expect(store.completionCount == 1)
+}
+
+@MainActor @Test func seriesLeaderFinishesBeforeRemainingEpisodesRunConcurrently() async throws {
+    let fixture = try Fixture(); defer { fixture.cleanup() }
+    let urls = try (1...10).map { try fixture.video(String(format: "Example.Show.S01E%02d.mkv", $0)) }
+    let service = SeriesGateDownloader()
+    let store = DownloadStore(service: service)
+    await store.add(urls)
+
+    store.start(preference: .ass, overwrite: false)
+    try await Task.sleep(for: .milliseconds(40))
+    #expect(await service.calls.count == 1)
+
+    while store.isRunning { try await Task.sleep(for: .milliseconds(20)) }
+    #expect(await service.calls.count == 10)
+    #expect(await service.peak == 8)
+    #expect(store.successCount == 10)
 }
 
 @MainActor @Test func cancellationMarksUnstartedVideosAndSupportsRetry() async throws {

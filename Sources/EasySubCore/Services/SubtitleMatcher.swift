@@ -2,6 +2,27 @@ import Foundation
 
 /// Deterministic filename heuristics, not a guarantee of synchronized dialogue.
 enum SubtitleMatcher {
+    /// Groups conventional episode filenames by normalized show title and season. The key is used
+    /// only for best-effort batch affinity; a missing or unusual episode marker remains ungrouped.
+    static func seriesKey(for video: URL) -> String? {
+        let name = video.deletingPathExtension().lastPathComponent.lowercased()
+        let pattern = #"\b(?:s(\d{1,2})[ ._-]*e\d{1,3}|(\d{1,2})x\d{1,3})\b"#
+        let regex = try! NSRegularExpression(pattern: pattern)
+        let range = NSRange(name.startIndex..., in: name)
+        guard let match = regex.firstMatch(in: name, range: range),
+              let matchRange = Range(match.range, in: name) else { return nil }
+        let title = name[..<matchRange.lowerBound]
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        guard !title.isEmpty else { return nil }
+        let season = [1, 2].compactMap { index -> Int? in
+            guard let valueRange = Range(match.range(at: index), in: name) else { return nil }
+            return Int(name[valueRange])
+        }.first ?? 0
+        return "\(title)|s\(season)"
+    }
+
     static func rank(_ candidates: [SubtitleCandidate], for video: URL,
                      preferredLanguageCodes: [String] = [], requirePreferredLanguage: Bool = false) -> [SubtitleCandidate] {
         rank(candidates, forName: video.deletingPathExtension().lastPathComponent,
