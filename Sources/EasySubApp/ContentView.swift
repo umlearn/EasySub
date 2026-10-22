@@ -302,7 +302,10 @@ struct ContentView: View {
                     outputDirectory: configuredOutputDirectory,
                     downloadedCandidates: item.downloadedCandidates,
                     width: min(880, max(520, contentWidth - 40)),
-                    height: min(620, max(420, contentHeight - 40))
+                    // Keep the search sheet aligned with the main window instead of
+                    // freezing at the former 620 pt cap. GeometryReader updates
+                    // contentHeight continuously while the window is being resized.
+                    height: max(420, contentHeight - 40)
                 ) { output, candidate in
                     store.recordManualDownload(video: item.video.url, output: output, candidate: candidate)
                 }

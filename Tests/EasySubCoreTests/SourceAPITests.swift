@@ -89,6 +89,14 @@ private func makeZip(_ files: [String: String]) throws -> Data {
     #expect(results[1].matchingText.contains("中文 Movie 2024"))
 }
 
+@Test func xunleiUsesFilenameLanguageBeforeProviderMetadata() async throws {
+    let response = #"{"code":0,"data":[{"url":"https://files.test/simple.srt","ext":"srt","name":"Movie.WEB-DLChsEng.srt"},{"url":"https://files.test/trad.srt","ext":"srt","name":"Movie.zh-Hant.srt","languages":["简体"]}]}"#
+    let provider = XunleiProvider(transport: APIStub([response]))
+    let results = try await provider.search(.init(video: URL(fileURLWithPath: "/tmp/Movie.mkv")))
+    #expect(results.first(where: { $0.reference.hasSuffix("simple.srt") })?.languageCodes == ["zh-cn", "en", "ze"])
+    #expect(results.first(where: { $0.reference.hasSuffix("trad.srt") })?.languageCodes == ["zh-tw"])
+}
+
 @Test func xunleiRejectsBusinessError() async throws {
     let provider = XunleiProvider(transport: APIStub([#"{"code":500}"#]))
     await #expect(throws: SourceAPIError.self) {
@@ -134,6 +142,28 @@ private func makeZip(_ files: [String: String]) throws -> Data {
         ["en", "ze", "zh-cn"],
         ["en", "ze", "zh-tw"]
     ])
+}
+
+@Test func assrtDoesNotApplyAmbiguousGroupLanguagesToEveryChildFile() async throws {
+    let stub = APIStub([
+        #"{"status":0,"sub":{"subs":[{"id":43,"filename":"Movie.zip","lang":{"desc":"英 简 繁 日 法 德 双语"},"filelist":[{"f":"Fre.srt"},{"f":"Cht_chs.srt"},{"f":"蜘蛛侠.中英字幕.ass"},{"f":"Ger.srt"},{"f":"Jpn.srt"},{"f":"Chs.srt"},{"f":"Movie.SDH.srt"}] }]}}"#
+    ])
+    let provider = try AssrtProvider(token: String(repeating: "a", count: 32), transport: stub,
+                                     limiter: AssrtRateLimiter(interval: .zero))
+    let results = try await provider.search(.init(video: URL(fileURLWithPath: "/tmp/Movie.mkv")))
+    #expect(results.map(\.languageCodes) == [
+        ["fr"], ["zh-cn", "zh-tw"], ["en", "ze", "zh"], ["de"], ["ja"], ["zh-cn"], []
+    ])
+}
+
+@Test func assrtKeepsUnambiguousGroupLanguageFallback() async throws {
+    let stub = APIStub([
+        #"{"status":0,"sub":{"subs":[{"id":44,"filename":"Movie.zip","lang":{"desc":"简体"},"filelist":[{"f":"Movie.SDH.srt"},{"f":"Movie.Forced.ass"}]}]}}"#
+    ])
+    let provider = try AssrtProvider(token: String(repeating: "a", count: 32), transport: stub,
+                                     limiter: AssrtRateLimiter(interval: .zero))
+    let results = try await provider.search(.init(video: URL(fileURLWithPath: "/tmp/Movie.mkv")))
+    #expect(results.map(\.languageCodes) == [["zh-cn"], ["zh-cn"]])
 }
 
 @Test func assrtRejectsInvalidTokenAndBusinessErrors() async throws {

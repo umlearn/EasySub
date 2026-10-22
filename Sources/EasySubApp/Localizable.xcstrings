@@ -1,6 +1,16 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "The inferred Chinese subtitle does not appear to contain Chinese dialogue.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "根据来源推断为中文的字幕似乎不包含中文对白。"
+          }
+        }
+      }
+    },
     "%lld": {
       "extractionState": "manual",
       "localizations": {
@@ -2127,6 +2137,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "ASSRT 返回的数据格式异常，字段：%@。"
+          }
+        }
+      }
+    },
+    "Language unknown": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Language unknown"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "语言未知"
           }
         }
       }

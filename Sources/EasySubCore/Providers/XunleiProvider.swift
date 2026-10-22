@@ -24,10 +24,15 @@ public actor XunleiProvider: SubtitleProvider {
                   seen.insert(item.url.lowercased()).inserted else { return nil }
             let hashMatch = videoCID != nil && item.cid?.caseInsensitiveCompare(videoCID!) == .orderedSame
             let score = (item.score ?? 0) + (item.fingerprintScore ?? 0)
+            let filenameLanguages = SubtitleLanguageNormalizer.codes(fromFileName: item.name)
+            let simpleNameLanguages = item.simpleName.map(SubtitleLanguageNormalizer.codes(fromFileName:)) ?? []
+            let providerLanguages = SubtitleLanguageNormalizer.codes(from: item.languages ?? [])
+            let languages = !filenameLanguages.isEmpty ? filenameLanguages
+                : (!simpleNameLanguages.isEmpty ? simpleNameLanguages : providerLanguages)
             let candidate = SubtitleCandidate(
                 source: source, reference: item.url, title: item.name,
                 matchingText: [item.name, item.simpleName].compactMap { $0 }.joined(separator: " / "),
-                format: format, languageCodes: Set(item.languages ?? []),
+                format: format, languageCodes: languages,
                 matchKind: hashMatch ? .fingerprint : .filename,
                 providerScore: score
             )

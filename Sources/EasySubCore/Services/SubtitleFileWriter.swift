@@ -33,6 +33,51 @@ enum SubtitleFileWriter {
         return Data(text.utf8)
     }
 
+    /// Returns true for likely Chinese dialogue, false for a sufficiently large sample that is
+    /// clearly non-Chinese, and nil when a short or unusual subtitle does not provide enough text.
+    /// Callers use this only to verify candidates inferred from a Chinese-community source.
+    static func likelyContainsChineseDialogue(_ data: Data, format: SubtitleFormat) -> Bool? {
+        guard let text = String(data: data.prefix(256 * 1024), encoding: .utf8) else { return nil }
+        let dialogue: String
+        switch format {
+        case .srt:
+            dialogue = text.split(whereSeparator: \Character.isNewline).compactMap { line -> String? in
+                let value = line.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !value.isEmpty,
+                      value.range(of: #"^\d+$"#, options: .regularExpression) == nil,
+                      !value.contains("-->") else { return nil }
+                return value
+            }.joined(separator: " ")
+        case .ass:
+            dialogue = text.split(whereSeparator: \Character.isNewline).compactMap { line -> String? in
+                let value = line.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard value.lowercased().hasPrefix("dialogue:") else { return nil }
+                return value.split(separator: ",", maxSplits: 9, omittingEmptySubsequences: false).last.map(String.init)
+            }.joined(separator: " ")
+        }
+        let visible = dialogue
+            .replacingOccurrences(of: #"<[^>]*>|\{[^}]*\}"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: #"\\[Nnh]"#, with: " ", options: .regularExpression)
+        var han = 0
+        var letters = 0
+        for scalar in visible.unicodeScalars {
+            guard CharacterSet.letters.contains(scalar) else { continue }
+            letters += 1
+            switch scalar.value {
+            case 0x3400...0x4DBF, 0x4E00...0x9FFF, 0x20000...0x2FA1F:
+                han += 1
+            default:
+                break
+            }
+            if letters >= 4_000 { break }
+        }
+        guard letters >= 40 else {
+            return han >= 4 && han * 4 >= letters ? true : nil
+        }
+        if han >= 12 || han * 12 >= letters { return true }
+        return false
+    }
+
     static func save(_ data: Data, to url: URL, overwrite: Bool) throws {
         try Task.checkCancellation()
         if overwrite { try data.write(to: url, options: .atomic); return }

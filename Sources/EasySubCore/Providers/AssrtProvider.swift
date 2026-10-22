@@ -30,9 +30,19 @@ public actor AssrtProvider: SubtitleProvider {
             let matchingText = [sub.nativeName, sub.videoName, sub.filename, filename]
                 .compactMap { $0 }.joined(separator: " / ")
             let fileLanguages = filename.map(SubtitleLanguageNormalizer.codes(fromFileName:)) ?? []
-            let languages = fileLanguages.isEmpty
-                ? SubtitleLanguageNormalizer.codes(from: sub.languageDescription.map { [$0] } ?? [])
-                : fileLanguages
+            let groupLanguages = SubtitleLanguageNormalizer.codes(
+                from: sub.languageDescription.map { [$0] } ?? []
+            )
+            let subtitleFileCount = sub.filelist.filter {
+                SubtitleFormat(rawValue: ($0.f as NSString).pathExtension.lowercased()) != nil
+            }.count
+            // A group description is reliable for a single subtitle, or when it names only one
+            // language. Applying a multi-language group description to every child file makes a
+            // French, SDH, or otherwise ambiguous file appear to contain every language in the pack.
+            let canUseGroupLanguages = subtitleFileCount <= 1 || groupLanguages.count <= 1
+            let languages = !fileLanguages.isEmpty
+                ? fileLanguages
+                : (canUseGroupLanguages ? groupLanguages : [])
             let candidate = SubtitleCandidate(source: source, reference: reference, title: title,
                                               matchingText: matchingText, format: format,
                                               languageCodes: languages)

@@ -144,6 +144,8 @@ struct SubtitlePickerView: View {
         var parts = [candidate.source.name, candidate.format.rawValue.uppercased()]
         if !candidate.languageCodes.isEmpty {
             parts.append(SubtitleLanguageCatalog.displayLabel(for: candidate.languageCodes, in: locale))
+        } else {
+            parts.append(String(localized: "Language unknown"))
         }
         if candidate.matchKind == .fingerprint {
             parts.append(String(localized: "Fingerprint match"))

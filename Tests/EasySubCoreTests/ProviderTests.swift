@@ -19,6 +19,8 @@ private struct ProviderFiles {
 
 private let assData = Data("[Script Info]\nScriptType: v4.00+\n[Events]\nDialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,Hello\n".utf8)
 private let srtData = Data("1\n00:00:01,000 --> 00:00:02,000\nHello\n".utf8)
+private let chineseSRTData = Data("1\n00:00:01,000 --> 00:00:03,000\n这是用于确认字幕语言的中文对白内容。\n2\n00:00:04,000 --> 00:00:07,000\n我们需要确保自动下载选择正确的中文字幕。\n".utf8)
+private let englishSRTData = Data("1\n00:00:01,000 --> 00:00:03,000\nThis subtitle contains enough English dialogue to identify its language.\n2\n00:00:04,000 --> 00:00:07,000\nIt should be rejected when Chinese was inferred only from the source.\n".utf8)
 
 @Test func subtitleLanguageLabelsUseChineseForChineseAndAppLocaleForOthers() {
     let english = Locale(identifier: "en")
@@ -33,6 +35,96 @@ private let srtData = Data("1\n00:00:01,000 --> 00:00:02,000\nHello\n".utf8)
     ) == "简体中文 + 英语 + 双语字幕")
     #expect(SubtitleLanguageCatalog.displayLabel(for: ["en", "ja"], in: english)
             == "English + Japanese")
+    #expect(SubtitleLanguageCatalog.displayLabel(for: ["zh", "en", "ze"], in: chinese)
+            == "中文 + 英语 + 双语字幕")
+}
+
+@Test func subtitleFilenameLanguagesRecognizeAliasesCombinationsAndAccessibilitySuffixes() {
+    let cases: [(String, Set<String>)] = [
+        ("Fre.srt", ["fr"]), ("Ger.srt", ["de"]), ("Jpn.srt", ["ja"]),
+        ("Movie.HK.ass", ["zh-tw"]), ("Movie.CHT_CHS.srt", ["zh-cn", "zh-tw"]),
+        ("Movie.CHS&ENG.ass", ["zh-cn", "en", "ze"]),
+        ("Movie.WEB-DLChs.srt", ["zh-cn"]),
+        ("Movie.WEB-DLChsEng.ass", ["zh-cn", "en", "ze"]),
+        ("Movie.WEB-DLCHTENG.srt", ["zh-tw", "en", "ze"]),
+        ("Movie.zh-CN.srt", ["zh-cn"]), ("Movie.zh_Hant.srt", ["zh-tw"]),
+        ("Movie.zhCN.srt", ["zh-cn"]), ("Movie.zh.srt", ["zh"]),
+        ("Movie.cn.srt", ["zh-cn"]),
+        ("蜘蛛侠.中英字幕.ass", ["zh", "en", "ze"]),
+        ("Movie.en.forced.srt", ["en"]),
+        ("Movie.SDH.srt", []), ("Movie.HI.srt", []), ("Movie.CC.srt", [])
+    ]
+    for (filename, expected) in cases {
+        #expect(SubtitleLanguageNormalizer.codes(fromFileName: filename) == expected)
+    }
+}
+
+@Test func chineseSourcePriorOnlyAppliesWhenLanguageIsUnknown() {
+    let assrt = SubtitleSource(id: "assrt", name: "ASSRT")
+    let unknown = SubtitleCandidate(source: assrt, reference: "unknown", title: "Movie.srt", format: .srt)
+    let english = SubtitleCandidate(source: assrt, reference: "english", title: "Movie.Eng.srt",
+                                    format: .srt, languageCodes: ["en"])
+    #expect(SubtitleLanguageCatalog.preferenceMatch(for: unknown, in: ["zh-cn"])?.confidence == 2)
+    #expect(SubtitleLanguageCatalog.preferenceMatch(for: english, in: ["zh-cn"]) == nil)
+}
+
+@Test func chineseSourcePriorRanksAfterExplicitChineseAndRejectsExplicitEnglish() {
+    let assrt = SubtitleSource(id: "assrt", name: "ASSRT")
+    let other = SubtitleSource(id: "other", name: "Other")
+    let candidates = [
+        SubtitleCandidate(source: assrt, reference: "english", title: "Movie.Eng.srt",
+                          format: .srt, languageCodes: ["en"]),
+        SubtitleCandidate(source: assrt, reference: "source-prior", title: "Movie.srt", format: .srt),
+        SubtitleCandidate(source: other, reference: "explicit", title: "Movie.Chs.srt",
+                          format: .srt, languageCodes: ["zh-cn"]),
+        SubtitleCandidate(source: other, reference: "unknown", title: "Movie.srt", format: .srt)
+    ]
+    let ranked = SubtitleMatcher.rank(candidates, forName: "Movie", preferredLanguageCodes: ["zh-cn"],
+                                      requirePreferredLanguage: true)
+    #expect(ranked.map(\.reference) == ["explicit", "source-prior"])
+}
+
+@Test func inferredChineseContentDetectionIsConservative() {
+    #expect(SubtitleFileWriter.likelyContainsChineseDialogue(chineseSRTData, format: .srt) == true)
+    #expect(SubtitleFileWriter.likelyContainsChineseDialogue(englishSRTData, format: .srt) == false)
+    #expect(SubtitleFileWriter.likelyContainsChineseDialogue(srtData, format: .srt) == nil)
+    let chineseASS = Data("[Script Info]\nTitle: English metadata\n[Events]\nDialogue: 0,0:00:01.00,0:00:03.00,Default,,0,0,0,,{\\i1}这是中文字幕正文，应该能够被正确识别。{\\i0}\n".utf8)
+    #expect(SubtitleFileWriter.likelyContainsChineseDialogue(chineseASS, format: .ass) == true)
+}
+
+@Test func automaticDownloadRejectsWrongInferredLanguageAndFallsBack() async throws {
+    let files = try ProviderFiles(); defer { files.cleanup() }
+    let source = SubtitleSource(id: "assrt", name: "assrt")
+    let candidates = [
+        SubtitleCandidate(source: source, reference: "english", title: "video.srt", format: .srt),
+        SubtitleCandidate(source: source, reference: "chinese", title: "video.srt", format: .srt)
+    ]
+    let provider = TestProvider("assrt", candidates: candidates,
+                                payloads: ["english": englishSRTData, "chinese": chineseSRTData])
+    let service = MultiSourceSubtitleService(provider: provider, preferredLanguageCodes: ["zh-cn"])
+    let result = try await service.download(video: files.video, preference: .srt, overwrite: false)
+    #expect(await provider.downloads == ["english", "chinese"])
+    #expect(result.selections.map(\.reference) == ["chinese"])
+    #expect(try Data(contentsOf: files.output(.srt)) == chineseSRTData)
+}
+
+@Test func subtitleFilenameLanguagesDoNotMatchCodesInsideTitles() {
+    for filename in ["Frozen.srt", "Golden.ass", "It.2017.srt", "No.2026.srt"] {
+        #expect(SubtitleLanguageNormalizer.codes(fromFileName: filename).isEmpty)
+    }
+}
+
+@Test func exactPreferredLanguageRanksAheadOfGenericChinese() {
+    let source = SubtitleSource(id: "language", name: "language")
+    let candidates = [
+        SubtitleCandidate(source: source, reference: "generic", title: "Movie.zh.srt",
+                          format: .srt, languageCodes: ["zh"]),
+        SubtitleCandidate(source: source, reference: "simplified", title: "Movie.chs.srt",
+                          format: .srt, languageCodes: ["zh-cn"])
+    ]
+    let ranked = SubtitleMatcher.rank(candidates, forName: "Movie", preferredLanguageCodes: ["zh-cn"],
+                                      requirePreferredLanguage: true)
+    #expect(ranked.map(\.reference) == ["simplified", "generic"])
 }
 
 private actor SearchProbe {

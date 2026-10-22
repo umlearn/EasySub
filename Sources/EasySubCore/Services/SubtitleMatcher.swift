@@ -33,9 +33,9 @@ enum SubtitleMatcher {
                      preferredLanguageCodes: [String] = [], requirePreferredLanguage: Bool = false) -> [SubtitleCandidate] {
         let target = Metadata(name)
         let preferences = SubtitleLanguageCatalog.normalizedPreferences(preferredLanguageCodes)
-        return candidates.enumerated().compactMap { index, candidate -> (Int, Int, Int, SubtitleCandidate)? in
-            let languageIndex = preferences.firstIndex(where: { candidate.languageCodes.contains($0) })
-            if requirePreferredLanguage && !preferences.isEmpty && languageIndex == nil { return nil }
+        return candidates.enumerated().compactMap { index, candidate -> (Int, Int, Int, Int, SubtitleCandidate)? in
+            let languageMatch = SubtitleLanguageCatalog.preferenceMatch(for: candidate, in: preferences)
+            if requirePreferredLanguage && !preferences.isEmpty && languageMatch == nil { return nil }
             // Known nonzero offsets need retiming, which this app does not perform.
             guard candidate.delayMilliseconds == nil || candidate.delayMilliseconds == 0 else { return nil }
             let metadata = Metadata(candidate.matchingText)
@@ -68,17 +68,20 @@ enum SubtitleMatcher {
                 if candidate.languageCodes.contains("zh-cn") { score += 25 }
                 else if candidate.languageCodes.contains("ze") { score += 20 }
                 else if candidate.languageCodes.contains("zh-tw") { score += 12 }
+                else if candidate.languageCodes.contains("zh") { score += 10 }
             }
             if candidate.delayMilliseconds == 0 { score += 10 }
             if let providerScore = candidate.providerScore {
                 score += min(20, max(-20, providerScore))
             }
-            return (languageIndex ?? Int.max, score, index, candidate)
+            return (languageMatch?.index ?? Int.max, languageMatch?.confidence ?? 0,
+                    score, index, candidate)
         }.sorted {
             if $0.0 != $1.0 { return $0.0 < $1.0 }
-            if $0.1 != $1.1 { return $0.1 > $1.1 }
-            return $0.2 < $1.2
-        }.map { $0.3 }
+            if $0.1 != $1.1 { return $0.1 < $1.1 }
+            if $0.2 != $1.2 { return $0.2 > $1.2 }
+            return $0.3 < $1.3
+        }.map { $0.4 }
     }
 
     private struct Metadata {

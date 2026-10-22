@@ -40,13 +40,17 @@ public actor MultiSourceSubtitleService: SubtitleDownloading {
         let ranked = SubtitleMatcher.rank(report.candidates, forName: request.matchingName,
                                           preferredLanguageCodes: preferredLanguageCodes)
         let rankedIDs = Set(ranked.map(\.id))
-        func languageIndex(_ candidate: SubtitleCandidate) -> Int {
-            preferredLanguageCodes.firstIndex(where: candidate.languageCodes.contains) ?? Int.max
+        func languageSortKey(_ candidate: SubtitleCandidate) -> (Int, Int) {
+            guard let match = SubtitleLanguageCatalog.preferenceMatch(
+                for: candidate, in: preferredLanguageCodes
+            ) else { return (Int.max, 0) }
+            return (match.index, match.confidence)
         }
         let remaining = report.candidates.enumerated().filter { !rankedIDs.contains($0.element.id) }.sorted {
-            let left = languageIndex($0.element)
-            let right = languageIndex($1.element)
-            return left == right ? $0.offset < $1.offset : left < right
+            let left = languageSortKey($0.element)
+            let right = languageSortKey($1.element)
+            if left.0 != right.0 { return left.0 < right.0 }
+            return left.1 == right.1 ? $0.offset < $1.offset : left.1 < right.1
         }.map(\.element)
         return SubtitleSearchResult(candidates: ranked + remaining,
                                     failures: report.failures)
@@ -110,9 +114,24 @@ public actor MultiSourceSubtitleService: SubtitleDownloading {
         if preferredLanguageCodes.isEmpty {
             groups = [candidates]
         } else {
-            groups = preferredLanguageCodes.map { language in
+            var exactGroups = preferredLanguageCodes.map { language in
                 candidates.filter { $0.languageCodes.contains(language) && assigned.insert($0.id).inserted }
             }.filter { !$0.isEmpty }
+            let acceptsGenericChinese = preferredLanguageCodes.contains("zh-cn")
+                || preferredLanguageCodes.contains("zh-tw")
+            if acceptsGenericChinese {
+                let genericChinese = candidates.filter {
+                    $0.languageCodes.contains("zh") && assigned.insert($0.id).inserted
+                }
+                if !genericChinese.isEmpty { exactGroups.append(genericChinese) }
+                let sourcePrior = candidates.filter {
+                    SubtitleLanguageCatalog.preferenceMatch(
+                        for: $0, in: preferredLanguageCodes
+                    )?.confidence == 2 && assigned.insert($0.id).inserted
+                }
+                if !sourcePrior.isEmpty { exactGroups.append(sourcePrior) }
+            }
+            groups = exactGroups
         }
         for candidates in groups {
             var saved: [URL] = []
@@ -145,12 +164,26 @@ public actor MultiSourceSubtitleService: SubtitleDownloading {
                         let raw = try await coordinator.download(candidate)
                         try Task.checkCancellation()
                         let data = try SubtitleFileWriter.normalized(raw, format: candidate.format)
+                        let isChineseSourceInference = SubtitleLanguageCatalog.preferenceMatch(
+                            for: candidate, in: preferredLanguageCodes
+                        )?.confidence == 2
+                        if isChineseSourceInference,
+                           SubtitleFileWriter.likelyContainsChineseDialogue(
+                               data, format: candidate.format
+                           ) == false {
+                            throw SubtitleError.unexpectedLanguage
+                        }
                         try SubtitleFileWriter.save(data, to: url, overwrite: overwrite)
                         saved.append(url); selections.append(candidate); downloaded = true; break
                     } catch {
                         if Task.isCancelled || error is CancellationError { throw CancellationError() }
                         lastError = error; formatError = error
-                        diagnostics.append(SubtitleSourceFailure(source: candidate.source, error: error))
+                        if case SubtitleError.unexpectedLanguage = error {
+                            // A source-language inference being disproved is an expected candidate
+                            // rejection, not a provider outage. Keep it silent when fallback succeeds.
+                        } else {
+                            diagnostics.append(SubtitleSourceFailure(source: candidate.source, error: error))
+                        }
                     }
                 }
                 if downloaded && preference != .both { break }
