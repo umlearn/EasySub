@@ -16,7 +16,7 @@
   <a href="LICENSE.md">
     <img src="https://img.shields.io/badge/license-BSD--3--Clause-blue.svg" alt="BSD-3-Clause">
   </a>
-  <a href="https://umlearn.github.io/EasySub/">
+  <a href="https://easysub.umlearn.tech/">
     <img src="https://img.shields.io/badge/website-EasySub-1687ff.svg" alt="EasySub website">
   </a>
 </p>
