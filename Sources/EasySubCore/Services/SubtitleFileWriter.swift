@@ -4,6 +4,10 @@ import CoreFoundation
 /// Shared payload guards and same-directory writes, independent of a subtitle provider.
 /// Archive members are read by SubtitleArchive before this final format validation.
 enum SubtitleFileWriter {
+    enum ChineseDialogueScript: Equatable {
+        case simplified, traditional, mixed, chinese, nonChinese, inconclusive
+    }
+
     static func validate(_ data: Data) throws {
         guard data.count <= 8 * 1024 * 1024 else { throw SubtitleError.oversizedResponse }
         let prefix = String(decoding: data.prefix(512), as: UTF8.self)
@@ -37,7 +41,20 @@ enum SubtitleFileWriter {
     /// clearly non-Chinese, and nil when a short or unusual subtitle does not provide enough text.
     /// Callers use this only to verify candidates inferred from a Chinese-community source.
     static func likelyContainsChineseDialogue(_ data: Data, format: SubtitleFormat) -> Bool? {
-        guard let text = String(data: data.prefix(256 * 1024), encoding: .utf8) else { return nil }
+        switch chineseDialogueScript(data, format: format) {
+        case .simplified, .traditional, .mixed, .chinese: true
+        case .nonChinese: false
+        case .inconclusive: nil
+        }
+    }
+
+    /// Distinguishes Chinese scripts from dialogue rather than trusting provider metadata alone.
+    /// ICU's contextual conversion supplies the evidence; conservative thresholds keep short,
+    /// neutral, Japanese, and genuinely mixed-script subtitles from being rejected automatically.
+    static func chineseDialogueScript(_ data: Data, format: SubtitleFormat) -> ChineseDialogueScript {
+        guard let text = String(data: data.prefix(256 * 1024), encoding: .utf8) else {
+            return .inconclusive
+        }
         let dialogue: String
         switch format {
         case .srt:
@@ -63,19 +80,60 @@ enum SubtitleFileWriter {
         for scalar in visible.unicodeScalars {
             guard CharacterSet.letters.contains(scalar) else { continue }
             letters += 1
-            switch scalar.value {
-            case 0x3400...0x4DBF, 0x4E00...0x9FFF, 0x20000...0x2FA1F:
-                han += 1
-            default:
-                break
-            }
+            if isHan(scalar) { han += 1 }
             if letters >= 4_000 { break }
         }
-        guard letters >= 40 else {
-            return han >= 4 && han * 4 >= letters ? true : nil
+        let containsChinese: Bool
+        if letters < 40 {
+            guard han >= 4 && han * 4 >= letters else { return .inconclusive }
+            containsChinese = true
+        } else {
+            containsChinese = han >= 12 || han * 12 >= letters
         }
-        if han >= 12 || han * 12 >= letters { return true }
-        return false
+        guard containsChinese else { return .nonChinese }
+
+        let sampled = String(visible.prefix(16_000))
+        guard let simplified = sampled.applyingTransform(
+            StringTransform("Traditional-Simplified"), reverse: false
+        ), let traditional = sampled.applyingTransform(
+            StringTransform("Simplified-Traditional"), reverse: false
+        ) else { return .chinese }
+        let originalCharacters = Array(sampled)
+        let simplifiedCharacters = Array(simplified)
+        let traditionalCharacters = Array(traditional)
+        guard originalCharacters.count == simplifiedCharacters.count,
+              originalCharacters.count == traditionalCharacters.count else { return .chinese }
+
+        var simplifiedEvidence = 0
+        var traditionalEvidence = 0
+        for index in originalCharacters.indices {
+            let original = originalCharacters[index]
+            guard original.unicodeScalars.contains(where: isHan) else { continue }
+            let toSimplified = simplifiedCharacters[index]
+            let toTraditional = traditionalCharacters[index]
+            if toTraditional != original, toSimplified == original { simplifiedEvidence += 1 }
+            if toSimplified != original, toTraditional == original { traditionalEvidence += 1 }
+        }
+        let minimumEvidence = han >= 40 ? 4 : 3
+        if simplifiedEvidence >= minimumEvidence,
+           simplifiedEvidence >= max(minimumEvidence, traditionalEvidence * 3) {
+            return .simplified
+        }
+        if traditionalEvidence >= minimumEvidence,
+           traditionalEvidence >= max(minimumEvidence, simplifiedEvidence * 3) {
+            return .traditional
+        }
+        if simplifiedEvidence >= minimumEvidence, traditionalEvidence >= minimumEvidence {
+            return .mixed
+        }
+        return .chinese
+    }
+
+    private static func isHan(_ scalar: Unicode.Scalar) -> Bool {
+        switch scalar.value {
+        case 0x3400...0x4DBF, 0x4E00...0x9FFF, 0x20000...0x2FA1F: true
+        default: false
+        }
     }
 
     static func save(_ data: Data, to url: URL, overwrite: Bool) throws {

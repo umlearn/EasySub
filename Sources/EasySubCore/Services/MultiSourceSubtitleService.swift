@@ -3,6 +3,11 @@ import Foundation
 /// Application-facing service. Candidates are ranked across all sources before downloading.
 /// Language priority spans all sources before format preference is considered.
 public actor MultiSourceSubtitleService: SubtitleDownloading {
+    private struct CandidateGroup {
+        let preferenceCode: String?
+        let candidates: [SubtitleCandidate]
+    }
+
     private struct SeriesAffinity: Sendable {
         var sourceByFormat: [SubtitleFormat: String]
         let primarySourceID: String
@@ -110,30 +115,38 @@ public actor MultiSourceSubtitleService: SubtitleDownloading {
         var diagnostics = report.failures
         var lastError: (any Error)? = report.failures.first?.error
         var assigned = Set<SubtitleCandidate.ID>()
-        let groups: [[SubtitleCandidate]]
+        let groups: [CandidateGroup]
         if preferredLanguageCodes.isEmpty {
-            groups = [candidates]
+            groups = [CandidateGroup(preferenceCode: nil, candidates: candidates)]
         } else {
-            var exactGroups = preferredLanguageCodes.map { language in
-                candidates.filter { $0.languageCodes.contains(language) && assigned.insert($0.id).inserted }
-            }.filter { !$0.isEmpty }
+            var exactGroups = preferredLanguageCodes.compactMap { language -> CandidateGroup? in
+                let matches = candidates.filter {
+                    $0.languageCodes.contains(language) && assigned.insert($0.id).inserted
+                }
+                return matches.isEmpty ? nil : CandidateGroup(preferenceCode: language, candidates: matches)
+            }
             let acceptsGenericChinese = preferredLanguageCodes.contains("zh-cn")
                 || preferredLanguageCodes.contains("zh-tw")
             if acceptsGenericChinese {
                 let genericChinese = candidates.filter {
                     $0.languageCodes.contains("zh") && assigned.insert($0.id).inserted
                 }
-                if !genericChinese.isEmpty { exactGroups.append(genericChinese) }
+                if !genericChinese.isEmpty {
+                    exactGroups.append(CandidateGroup(preferenceCode: "zh", candidates: genericChinese))
+                }
                 let sourcePrior = candidates.filter {
                     SubtitleLanguageCatalog.preferenceMatch(
                         for: $0, in: preferredLanguageCodes
                     )?.confidence == 2 && assigned.insert($0.id).inserted
                 }
-                if !sourcePrior.isEmpty { exactGroups.append(sourcePrior) }
+                if !sourcePrior.isEmpty {
+                    exactGroups.append(CandidateGroup(preferenceCode: nil, candidates: sourcePrior))
+                }
             }
             groups = exactGroups
         }
-        for candidates in groups {
+        for group in groups {
+            let candidates = group.candidates
             var saved: [URL] = []
             var selections: [SubtitleCandidate] = []
             var kept: [URL] = []
@@ -164,13 +177,18 @@ public actor MultiSourceSubtitleService: SubtitleDownloading {
                         let raw = try await coordinator.download(candidate)
                         try Task.checkCancellation()
                         let data = try SubtitleFileWriter.normalized(raw, format: candidate.format)
+                        let detectedScript = SubtitleFileWriter.chineseDialogueScript(
+                            data, format: candidate.format
+                        )
                         let isChineseSourceInference = SubtitleLanguageCatalog.preferenceMatch(
                             for: candidate, in: preferredLanguageCodes
                         )?.confidence == 2
-                        if isChineseSourceInference,
-                           SubtitleFileWriter.likelyContainsChineseDialogue(
-                               data, format: candidate.format
-                           ) == false {
+                        let conflictsWithPreference = switch (group.preferenceCode, detectedScript) {
+                        case ("zh-cn", .traditional), ("zh-tw", .simplified): true
+                        default: false
+                        }
+                        if conflictsWithPreference
+                            || (isChineseSourceInference && detectedScript == .nonChinese) {
                             throw SubtitleError.unexpectedLanguage
                         }
                         try SubtitleFileWriter.save(data, to: url, overwrite: overwrite)
@@ -179,8 +197,8 @@ public actor MultiSourceSubtitleService: SubtitleDownloading {
                         if Task.isCancelled || error is CancellationError { throw CancellationError() }
                         lastError = error; formatError = error
                         if case SubtitleError.unexpectedLanguage = error {
-                            // A source-language inference being disproved is an expected candidate
-                            // rejection, not a provider outage. Keep it silent when fallback succeeds.
+                            // Content disproving language metadata or a source inference is an
+                            // expected rejection, not a provider outage. Keep it silent on fallback.
                         } else {
                             diagnostics.append(SubtitleSourceFailure(source: candidate.source, error: error))
                         }

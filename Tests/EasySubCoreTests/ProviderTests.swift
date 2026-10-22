@@ -21,6 +21,8 @@ private let assData = Data("[Script Info]\nScriptType: v4.00+\n[Events]\nDialogu
 private let srtData = Data("1\n00:00:01,000 --> 00:00:02,000\nHello\n".utf8)
 private let chineseSRTData = Data("1\n00:00:01,000 --> 00:00:03,000\n这是用于确认字幕语言的中文对白内容。\n2\n00:00:04,000 --> 00:00:07,000\n我们需要确保自动下载选择正确的中文字幕。\n".utf8)
 private let englishSRTData = Data("1\n00:00:01,000 --> 00:00:03,000\nThis subtitle contains enough English dialogue to identify its language.\n2\n00:00:04,000 --> 00:00:07,000\nIt should be rejected when Chinese was inferred only from the source.\n".utf8)
+private let simplifiedSRTData = Data("1\n00:00:01,000 --> 00:00:03,000\n这个视频已经发布，我们发现里面还有很多问题，需要继续处理。\n2\n00:00:04,000 --> 00:00:07,000\n请打开设置选择正确语言，然后重新下载字幕文件。\n".utf8)
+private let traditionalSRTData = Data("1\n00:00:01,000 --> 00:00:03,000\n這個影片已經發佈，我們發現裡面還有很多問題，需要繼續處理。\n2\n00:00:04,000 --> 00:00:07,000\n請開啟設定選擇正確語言，然後重新下載字幕檔案。\n".utf8)
 
 @Test func subtitleLanguageLabelsUseChineseForChineseAndAppLocaleForOthers() {
     let english = Locale(identifier: "en")
@@ -92,6 +94,14 @@ private let englishSRTData = Data("1\n00:00:01,000 --> 00:00:03,000\nThis subtit
     #expect(SubtitleFileWriter.likelyContainsChineseDialogue(chineseASS, format: .ass) == true)
 }
 
+@Test func chineseDialogueScriptDistinguishesSimplifiedTraditionalAndNeutralText() {
+    #expect(SubtitleFileWriter.chineseDialogueScript(simplifiedSRTData, format: .srt) == .simplified)
+    #expect(SubtitleFileWriter.chineseDialogueScript(traditionalSRTData, format: .srt) == .traditional)
+    #expect(SubtitleFileWriter.chineseDialogueScript(chineseSRTData, format: .srt) == .simplified)
+    #expect(SubtitleFileWriter.chineseDialogueScript(englishSRTData, format: .srt) == .nonChinese)
+    #expect(SubtitleFileWriter.chineseDialogueScript(srtData, format: .srt) == .inconclusive)
+}
+
 @Test func automaticDownloadRejectsWrongInferredLanguageAndFallsBack() async throws {
     let files = try ProviderFiles(); defer { files.cleanup() }
     let source = SubtitleSource(id: "assrt", name: "assrt")
@@ -106,6 +116,42 @@ private let englishSRTData = Data("1\n00:00:01,000 --> 00:00:03,000\nThis subtit
     #expect(await provider.downloads == ["english", "chinese"])
     #expect(result.selections.map(\.reference) == ["chinese"])
     #expect(try Data(contentsOf: files.output(.srt)) == chineseSRTData)
+}
+
+@Test func automaticDownloadRejectsTraditionalContentMislabeledAsSimplified() async throws {
+    let files = try ProviderFiles(); defer { files.cleanup() }
+    let source = SubtitleSource(id: "metadata", name: "metadata")
+    let candidates = [
+        SubtitleCandidate(source: source, reference: "wrong", title: "video.chs.srt",
+                          format: .srt, languageCodes: ["zh-cn"]),
+        SubtitleCandidate(source: source, reference: "correct", title: "video.chs.srt",
+                          format: .srt, languageCodes: ["zh-cn"])
+    ]
+    let provider = TestProvider("metadata", candidates: candidates,
+                                payloads: ["wrong": traditionalSRTData, "correct": simplifiedSRTData])
+    let service = MultiSourceSubtitleService(provider: provider, preferredLanguageCodes: ["zh-cn"])
+    let result = try await service.download(video: files.video, preference: .srt, overwrite: false)
+    #expect(await provider.downloads == ["wrong", "correct"])
+    #expect(result.selections.map(\.reference) == ["correct"])
+    #expect(try Data(contentsOf: files.output(.srt)) == simplifiedSRTData)
+}
+
+@Test func automaticDownloadRejectsSimplifiedContentMislabeledAsTraditional() async throws {
+    let files = try ProviderFiles(); defer { files.cleanup() }
+    let source = SubtitleSource(id: "metadata", name: "metadata")
+    let candidates = [
+        SubtitleCandidate(source: source, reference: "wrong", title: "video.cht.srt",
+                          format: .srt, languageCodes: ["zh-tw"]),
+        SubtitleCandidate(source: source, reference: "correct", title: "video.cht.srt",
+                          format: .srt, languageCodes: ["zh-tw"])
+    ]
+    let provider = TestProvider("metadata", candidates: candidates,
+                                payloads: ["wrong": simplifiedSRTData, "correct": traditionalSRTData])
+    let service = MultiSourceSubtitleService(provider: provider, preferredLanguageCodes: ["zh-tw"])
+    let result = try await service.download(video: files.video, preference: .srt, overwrite: false)
+    #expect(await provider.downloads == ["wrong", "correct"])
+    #expect(result.selections.map(\.reference) == ["correct"])
+    #expect(try Data(contentsOf: files.output(.srt)) == traditionalSRTData)
 }
 
 @Test func subtitleFilenameLanguagesDoNotMatchCodesInsideTitles() {

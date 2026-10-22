@@ -19,7 +19,7 @@ public enum SubtitleError: Error, LocalizedError, Sendable {
         case .insecureURL: String(localized: "The service returned an insecure download link.")
         case .emptySubtitle: String(localized: "The downloaded subtitle is empty or is an HTML error page.")
         case .oversizedResponse: String(localized: "The service response exceeds the size limit.")
-        case .unexpectedLanguage: String(localized: "The inferred Chinese subtitle does not appear to contain Chinese dialogue.")
+        case .unexpectedLanguage: String(localized: "The subtitle content does not match the preferred Chinese language.")
         case .archiveUnsupported: String(localized: "The subtitle archive could not be extracted.")
         case .archiveMissingSubtitle: String(localized: "The subtitle archive contains no ASS or SRT file.")
         case .http(let status): String(format: String(localized: "Service returned HTTP %d."), status)

@@ -1,12 +1,12 @@
 {
   "sourceLanguage": "en",
   "strings": {
-    "The inferred Chinese subtitle does not appear to contain Chinese dialogue.": {
+    "The subtitle content does not match the preferred Chinese language.": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "根据来源推断为中文的字幕似乎不包含中文对白。"
+            "value": "字幕正文与首选中文语言不匹配。"
           }
         }
       }
