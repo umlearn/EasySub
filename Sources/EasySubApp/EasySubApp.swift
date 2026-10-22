@@ -4,7 +4,15 @@ import UserNotifications
 @main
 struct EasySubApp: App {
     @State private var store = DownloadStore()
+#if DEBUG
+    @State private var updateChecker = UpdateChecker(
+        currentVersion: ProcessInfo.processInfo.arguments.contains("--simulate-update-available")
+            ? "0.0.0"
+            : nil
+    )
+#else
     @State private var updateChecker = UpdateChecker()
+#endif
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @Environment(\.openWindow) private var openWindow
 
@@ -27,10 +35,14 @@ struct EasySubApp: App {
             }
             CommandGroup(after: .appInfo) {
                 Button("Check for Updates…") {
-                    openWindow(id: "settings")
-                    Task { await updateChecker.check(manual: true) }
+                    Task { await updateChecker.checkForUpdates(from: .menu) }
                 }
                 .disabled(updateChecker.isChecking)
+            }
+            CommandGroup(replacing: .help) {
+                Button("EasySub Help") {
+                    NSWorkspace.shared.open(URL(string: "https://github.com/umlearn/EasySub")!)
+                }
             }
         }
         Window("EasySub Settings", id: "settings") {

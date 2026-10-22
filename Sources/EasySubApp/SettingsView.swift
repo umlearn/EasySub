@@ -179,7 +179,7 @@ struct SettingsView: View {
                     }
 
                     Button("Check for Updates…") {
-                        Task { await updateChecker.check(manual: true) }
+                        Task { await updateChecker.checkForUpdates(from: .settings) }
                     }
                     .disabled(updateChecker.isChecking)
                     .padding(.top, 4)
@@ -231,29 +231,12 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
         case .upToDate:
-            Label("EasySub is up to date.", systemImage: "checkmark.circle.fill")
+            Text("Up to date.")
                 .foregroundStyle(.green)
         case .available(let release):
-            VStack(spacing: 8) {
-                Text(String(format: String(localized: "Version %@ is available."), release.version))
-                    .fontWeight(.medium)
+            Text(String(format: String(localized: "Version %@ is available."), release.version))
+                .fontWeight(.medium)
                 .foregroundStyle(Color.accentColor)
-
-                let notes = release.notes.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !notes.isEmpty {
-                    Text(verbatim: notes)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(4)
-                        .multilineTextAlignment(.center)
-                }
-
-                HStack(spacing: 12) {
-                    Link("View Release", destination: release.pageURL)
-                    Button("Skip This Version") { updateChecker.skip(release) }
-                        .buttonStyle(.link)
-                }
-            }
         case .failed(let message):
             Text(verbatim: message)
             .foregroundStyle(.secondary)

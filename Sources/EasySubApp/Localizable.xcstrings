@@ -2354,14 +2354,47 @@
     "Check for Updates…": {
       "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "检查更新…" } } }
     },
+    "EasySub Help": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "EasySub 帮助" } } }
+    },
+    "Release notes": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "版本说明" } } }
+    },
+    "Release Notes": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "版本说明" } } }
+    },
+    "You’re using version %@.": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "当前版本为 %@。" } } }
+    },
+    "You’re up to date!": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "已是最新版本！" } } }
+    },
+    "Couldn’t check for updates.": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "无法检查更新。" } } }
+    },
+    "Checking for updates…": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "正在检查更新…" } } }
+    },
+    "Please wait for the current update check to finish.": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "请等待当前更新检查完成。" } } }
+    },
+    "No update information is available.": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "当前没有可用的更新信息。" } } }
+    },
+    "Run “Check for Updates…” again to retry.": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "请重新运行“检查更新…”进行重试。" } } }
+    },
+    "Later": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "稍后" } } }
+    },
     "Automatically check for updates": {
       "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "自动检查更新" } } }
     },
     "Checking…": {
       "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "正在检查…" } } }
     },
-    "EasySub is up to date.": {
-      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "EasySub 已是最新版本。" } } }
+    "Up to date.": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "已是最新版本。" } } }
     },
     "Version %@ is available.": {
       "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "发现新版本 %@。" } } }
