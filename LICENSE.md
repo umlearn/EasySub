@@ -1,4 +1,5 @@
 Copyright (c) 2014, Song Zhou
+Copyright (c) 2026, umlearn and EasySub contributors
 
 All rights reserved.
 

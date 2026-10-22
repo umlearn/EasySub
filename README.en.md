@@ -123,8 +123,8 @@ python3 Scripts/generate_project.py
 
 ## Acknowledgements
 
-EasySub evolved from ShooterSubX. Thanks to the original author Song Zhou, all contributors, [Shooter.cn](https://www.shooter.cn), [FileLister](https://github.com/dwkns/FileLister), and [ShooterSubPyDownloader](https://github.com/magic282/ShooterSubPyDownloader).
+Thanks to everyone who has contributed code, feedback, and ideas to EasySub, as well as [Shooter.cn](https://www.shooter.cn), [FileLister](https://github.com/dwkns/FileLister), and [ShooterSubPyDownloader](https://github.com/magic282/ShooterSubPyDownloader).
 
 ## License
 
-EasySub is licensed under the [BSD 3-Clause License](LICENSE.md) and retains the original project's copyright notices.
+EasySub is licensed under the [BSD 3-Clause License](LICENSE.md).
