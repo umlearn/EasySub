@@ -309,7 +309,10 @@ private actor TestProvider: SubtitleProvider {
     let files = try ProviderFiles(); defer { files.cleanup() }
     let probe = SearchProbe()
     let providers = (0..<5).map { TestProvider("\($0)", delay: .milliseconds($0 == 0 ? 100 : 20), probe: probe) }
-    let coordinator = try SubtitleSearchCoordinator(providers: providers)
+    let coordinator = try SubtitleSearchCoordinator(
+        providers: providers,
+        searchLimiter: SubtitleSearchLimiter(limit: providers.count)
+    )
     let result = try await coordinator.search(SubtitleSearchRequest(video: files.video))
     #expect(await probe.peak == 5)
     #expect(result.candidates.map(\.source.id) == ["0", "1", "2", "3", "4"])
