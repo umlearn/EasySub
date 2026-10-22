@@ -1,5 +1,5 @@
 <p align="center">
-  <img width="180" src="Docs/Images/EasySub-AppIcon.png" alt="EasySub 应用图标">
+  <img width="180" src="docs/images/EasySub-AppIcon.png" alt="EasySub 应用图标">
 </p>
 
 <p align="center">
@@ -12,6 +12,9 @@
   <a href="LICENSE.md">
     <img src="https://img.shields.io/badge/license-BSD--3--Clause-blue.svg" alt="BSD-3-Clause">
   </a>
+  <a href="https://umlearn.github.io/EasySub/">
+    <img src="https://img.shields.io/badge/website-EasySub-1687ff.svg" alt="EasySub website">
+  </a>
 </p>
 
 ## EasySub
@@ -21,7 +24,7 @@ EasySub 是一款原生 macOS 字幕下载工具。把视频或文件夹拖进�
 应用使用 **Swift 6 + SwiftUI** 构建，支持 Apple Silicon 与 Intel Mac，无第三方运行时依赖。
 
 <p align="center">
-  <img width="960" src="Docs/Images/EasySub-Screenshot.png" alt="EasySub 主界面">
+  <img width="960" src="docs/images/EasySub-Screenshot.png" alt="EasySub 主界面">
 </p>
 
 ## ✨ 功能
@@ -41,7 +44,17 @@ EasySub 是一款原生 macOS 字幕下载工具。把视频或文件夹拖进�
 
 ## 🚀 安装
 
-目前请从源码构建。需要 macOS 14 或更高版本，以及 Xcode 16 或更高版本。
+### 下载预构建版本
+
+可以从 [GitHub Releases](https://github.com/umlearn/EasySub/releases/latest) 下载最新版本。
+
+当前发布的 EasySub 尚未使用 Apple Developer ID 签名或公证。首次打开时，macOS 可能提示无法验证开发者。请在 Finder 中右键点击 EasySub，选择“打开”；如果仍被阻止，请前往“系统设置 → 隐私与安全性”，确认打开该应用。
+
+请仅从本项目的 GitHub Releases 页面下载安装包。
+
+### 从源码构建
+
+需要 macOS 14 或更高版本，以及 Xcode 16 或更高版本。
 
 ```sh
 git clone https://github.com/umlearn/EasySub.git
@@ -57,7 +70,7 @@ xcodebuild -project EasySub.xcodeproj -scheme EasySub \
   -derivedDataPath build CODE_SIGNING_ALLOWED=NO build
 ```
 
-应用将生成在 `build/Build/Products/Release/EasySub.app`。本地构建未签名，仅用于开发；公开分发前需要使用 Developer ID 签名并公证。
+应用将生成在 `build/Build/Products/Release/EasySub.app`。本地构建同样未签名。
 
 ## 🕹 使用
 
@@ -72,8 +85,10 @@ xcodebuild -project EasySub.xcodeproj -scheme EasySub \
 
 ## 📚 文档
 
-- [字幕来源](Docs/Providers.md)：各来源的配置、验证状态、隐私策略与已知限制
-- [本地化指南](Docs/Localization.md)：完善现有翻译或添加新语言
+- [字幕来源](docs/providers.html)：各来源的配置、验证状态、隐私策略与已知限制
+- [本地化指南](docs/localization.html)：完善现有翻译或添加新语言
+
+项目网站是位于 `docs/` 的纯静态页面，不需要 Node 构建或单独的部署工作流。发布时在 GitHub 仓库的 **Settings → Pages** 中选择 **Deploy from a branch**，使用默认分支和 `/docs` 目录即可。
 
 ## 🧑‍💻 开发
 
