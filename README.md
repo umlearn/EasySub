@@ -3,6 +3,10 @@
 </p>
 
 <p align="center">
+  <strong>简体中文</strong> · <a href="README.en.md">English</a>
+</p>
+
+<p align="center">
   <a href="https://github.com/umlearn/EasySub/actions/workflows/ci.yml">
     <img src="https://github.com/umlearn/EasySub/actions/workflows/ci.yml/badge.svg" alt="Build and test">
   </a>
