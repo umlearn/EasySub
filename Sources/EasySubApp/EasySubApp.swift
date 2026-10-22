@@ -4,12 +4,15 @@ import UserNotifications
 @main
 struct EasySubApp: App {
     @State private var store = DownloadStore()
+    @State private var updateChecker = UpdateChecker()
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @Environment(\.openWindow) private var openWindow
 
     var body: some Scene {
         Window("EasySub", id: "main") {
             ContentView(store: store)
+                .environment(updateChecker)
+                .task { await updateChecker.performAutomaticCheckIfNeeded() }
         }
         .defaultSize(width: 1000, height: 680)
         .windowResizability(.contentMinSize)
@@ -22,9 +25,17 @@ struct EasySubApp: App {
                 Button("Settings…") { openWindow(id: "settings") }
                     .keyboardShortcut(",", modifiers: .command)
             }
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates…") {
+                    openWindow(id: "settings")
+                    Task { await updateChecker.check(manual: true) }
+                }
+                .disabled(updateChecker.isChecking)
+            }
         }
         Window("EasySub Settings", id: "settings") {
             SettingsView()
+                .environment(updateChecker)
         }
         .defaultSize(width: 580, height: 760)
         .windowResizability(.contentMinSize)

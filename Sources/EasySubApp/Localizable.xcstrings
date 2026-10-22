@@ -1723,19 +1723,19 @@
         }
       }
     },
-    "Xunlei (filename search)": {
+    "Xunlei": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Xunlei (filename search)"
+            "value": "Xunlei"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "迅雷（按文件名搜索）"
+            "value": "迅雷"
           }
         }
       }
@@ -1825,19 +1825,19 @@
         }
       }
     },
-    "Automatic matching compares title, year, season and episode. Use manual search when no candidate is safe to select. Video content stays on your Mac.": {
+    "Automatic matching compares title, year, season and episode. Use manual search when no candidate is safe to select.": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Automatic matching compares title, year, season and episode. Use manual search when no candidate is safe to select. Video content stays on your Mac."
+            "value": "Automatic matching compares title, year, season and episode. Use manual search when no candidate is safe to select."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "自动匹配会比较片名、年份、季和集数。没有足够把握时可使用手动搜索。视频内容始终保留在本机。"
+            "value": "自动匹配会比较片名、年份、季和集数。没有足够把握时可使用手动搜索。"
           }
         }
       }
@@ -2344,6 +2344,39 @@
     },
     "%@ daily download limit reached.": {
       "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "%@ 今日下载额度已用完。" } } }
+    },
+    "View Release": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "查看发布页面" } } }
+    },
+    "Skip This Version": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "跳过此版本" } } }
+    },
+    "Check for Updates…": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "检查更新…" } } }
+    },
+    "Automatically check for updates": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "自动检查更新" } } }
+    },
+    "Checking…": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "正在检查…" } } }
+    },
+    "EasySub is up to date.": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "EasySub 已是最新版本。" } } }
+    },
+    "Version %@ is available.": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "发现新版本 %@。" } } }
+    },
+    "GitHub returned an invalid response.": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "GitHub 返回了无效响应。" } } }
+    },
+    "No published EasySub release was found.": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "未找到已发布的 EasySub 版本。" } } }
+    },
+    "The release has an invalid version number.": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "发布版本号格式无效。" } } }
+    },
+    "GitHub returned HTTP status %lld.": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "GitHub 返回了 HTTP 状态码 %lld。" } } }
     }
   },
   "version": "1.0"

@@ -1,15 +1,18 @@
+import AppKit
 import SwiftUI
 import UserNotifications
 
 struct SettingsView: View {
     private let browseOutputDirectoryTag = "__browse_subtitle_output_directory__"
     @Environment(\.locale) private var locale
+    @Environment(UpdateChecker.self) private var updateChecker
     @State private var language = ApplicationLanguage.current()
     @AppStorage("SZSubTypeKey") private var preference = "ASS"
     @AppStorage("renameSubtitles") private var renameSubtitles = true
     @AppStorage("overwriteSubtitles") private var overwrite = false
     @AppStorage("subtitleOutputDirectory") private var subtitleOutputDirectory = ""
     @AppStorage("notifyOnCompletion") private var notify = false
+    @AppStorage(UpdateChecker.automaticChecksKey) private var automaticallyCheckForUpdates = true
     @AppStorage("subtitleLanguagePrimary") private var primaryLanguage = SubtitleLanguageCatalog.defaultCodes[0]
     @AppStorage("subtitleLanguageSecondary") private var secondaryLanguage = SubtitleLanguageCatalog.defaultCodes[1]
     @AppStorage("subtitleLanguageTertiary") private var tertiaryLanguage = SubtitleLanguageCatalog.defaultCodes[2]
@@ -96,12 +99,14 @@ struct SettingsView: View {
                 }
             }
             Section {
-                Toggle("Xunlei (filename search)", isOn: $xunlei)
+                Toggle("Xunlei", isOn: $xunlei)
                 Toggle("ASSRT (requires token)", isOn: $assrt)
+                    .listRowSeparator(assrt ? .hidden : .visible, edges: .bottom)
                 if assrt {
-                    VStack(alignment: .leading, spacing: 6) {
+                    VStack(alignment: .leading, spacing: 4) {
                         HStack(alignment: .firstTextBaseline, spacing: 20) {
                             Text("ASSRT token")
+                                .font(.callout)
                             Spacer(minLength: 20)
                             tokenField
                         }
@@ -111,12 +116,14 @@ struct SettingsView: View {
                             Link("Get token", destination: URL(string: "https://assrt.net/usercp.php")!)
                         }
                         .font(.caption)
+                        if token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            Text("Enter an ASSRT token to enable this source.")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
                     }
-                    .padding(.vertical, 4)
-                    if token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        Text("Enter an ASSRT token to enable this source.")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
+                    .padding(.leading, 8)
+                    .padding(.vertical, 2)
+                    .listRowSeparator(.hidden, edges: .top)
                 }
                 VStack(alignment: .leading, spacing: 6) {
                     Toggle("Shooter", isOn: $shooter)
@@ -124,6 +131,7 @@ struct SettingsView: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Toggle("OpenSubtitles (requires API key)", isOn: $openSubtitles)
+                    .listRowSeparator(openSubtitles ? .hidden : .visible, edges: .bottom)
                 if openSubtitles {
                     credentialRow(label: "OpenSubtitles API key", value: $openSubtitlesAPIKey,
                                   editing: $isEditingOpenSubtitlesKey,
@@ -132,7 +140,7 @@ struct SettingsView: View {
             } header: {
                 Text("Subtitle sources")
             } footer: {
-                Text("Automatic matching compares title, year, season and episode. Use manual search when no candidate is safe to select. Video content stays on your Mac.")
+                Text("Automatic matching compares title, year, season and episode. Use manual search when no candidate is safe to select.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("Notifications") {
@@ -153,12 +161,54 @@ struct SettingsView: View {
                 }
             }
             Section("About") {
-                VStack(alignment: .leading, spacing: 6) {
-                    LabeledContent("Version", value: appVersion)
+                VStack(spacing: 12) {
+                    VStack(spacing: 8) {
+                        Image(nsImage: NSApplication.shared.applicationIconImage)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 80, height: 80)
+                            .accessibilityHidden(true)
+
+                        VStack(spacing: 4) {
+                            Text(verbatim: "EasySub")
+                                .font(.title2.weight(.semibold))
+                            Text(verbatim: String(localized: "Version") + " " + appVersion)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    Button("Check for Updates…") {
+                        Task { await updateChecker.check(manual: true) }
+                    }
+                    .disabled(updateChecker.isChecking)
+                    .padding(.top, 4)
+
+                    if updateChecker.hasVisibleStatus || updateChecker.isChecking {
+                        updateStatus
+                    }
+
+                    Toggle("Automatically check for updates", isOn: $automaticallyCheckForUpdates)
+                        .toggleStyle(.checkbox)
+                        .fixedSize()
+                        .onChange(of: automaticallyCheckForUpdates) {
+                            guard automaticallyCheckForUpdates else { return }
+                            Task { await updateChecker.performAutomaticCheckIfNeeded() }
+                        }
+
+                    Divider()
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 8)
+
+                    Link("Source code & credits", destination: URL(string: "https://github.com/umlearn/EasySub")!)
                     Text("Xunlei · ASSRT · Shooter · OpenSubtitles")
-                        .font(.caption).foregroundStyle(.secondary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
                 }
-                Link("Source code & credits", destination: URL(string: "https://github.com/umlearn/EasySub")!)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 20)
+                .padding(.horizontal, 20)
             }
         }
         .formStyle(.grouped)
@@ -168,6 +218,47 @@ struct SettingsView: View {
 
     private var appVersion: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
+    }
+
+    @ViewBuilder private var updateStatus: some View {
+        switch updateChecker.status {
+        case .idle:
+            EmptyView()
+        case .checking:
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small)
+                Text("Checking…")
+                    .foregroundStyle(.secondary)
+            }
+        case .upToDate:
+            Label("EasySub is up to date.", systemImage: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+        case .available(let release):
+            VStack(spacing: 8) {
+                Text(String(format: String(localized: "Version %@ is available."), release.version))
+                    .fontWeight(.medium)
+                .foregroundStyle(Color.accentColor)
+
+                let notes = release.notes.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !notes.isEmpty {
+                    Text(verbatim: notes)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(4)
+                        .multilineTextAlignment(.center)
+                }
+
+                HStack(spacing: 12) {
+                    Link("View Release", destination: release.pageURL)
+                    Button("Skip This Version") { updateChecker.skip(release) }
+                        .buttonStyle(.link)
+                }
+            }
+        case .failed(let message):
+            Text(verbatim: message)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
+        }
     }
 
     private var selectedLanguageCodes: [String] {
@@ -372,14 +463,15 @@ struct SettingsView: View {
     @ViewBuilder private func credentialRow(label: LocalizedStringKey, value: Binding<String>,
                                              editing: Binding<Bool>, linkTitle: LocalizedStringKey,
                                              link: String) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .firstTextBaseline, spacing: 20) {
                 Text(label)
+                    .font(.callout)
                 Spacer(minLength: 20)
                 if editing.wrappedValue {
                     TextField("", text: value)
                         .textFieldStyle(.plain).multilineTextAlignment(.trailing)
-                        .font(.system(.body, design: .monospaced)).lineLimit(1)
+                        .font(.system(.callout, design: .monospaced)).lineLimit(1)
                         .onSubmit {
                             value.wrappedValue = value.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines)
                             editing.wrappedValue = false
@@ -388,6 +480,7 @@ struct SettingsView: View {
                 } else {
                     Button { editing.wrappedValue = true } label: {
                         Text(value.wrappedValue.isEmpty ? "input your API key here" : String(repeating: "•", count: 18))
+                            .font(.callout)
                             .foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .trailing)
                     }
                     .buttonStyle(.plain).frame(width: 300)
@@ -397,7 +490,10 @@ struct SettingsView: View {
                 Text("Provided by opensubtitles.com").foregroundStyle(.secondary)
                 Link(linkTitle, destination: URL(string: link)!)
             }.font(.caption)
-        }.padding(.vertical, 4)
+        }
+        .padding(.leading, 8)
+        .padding(.vertical, 2)
+        .listRowSeparator(.hidden, edges: .top)
     }
 
     private var outputDirectorySelection: Binding<String> {
@@ -434,7 +530,7 @@ struct SettingsView: View {
             TextField("", text: $token)
                 .textFieldStyle(.plain)
                 .multilineTextAlignment(.trailing)
-                .font(.system(.body, design: .monospaced))
+                .font(.system(.callout, design: .monospaced))
                 .lineLimit(1)
                 .focused($tokenIsFocused)
                 .task {
@@ -473,6 +569,7 @@ struct SettingsView: View {
                     }
                 }
                 .foregroundStyle(.secondary)
+                .font(.callout)
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .trailing)
             }
