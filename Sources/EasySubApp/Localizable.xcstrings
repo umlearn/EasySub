@@ -2443,6 +2443,30 @@
     },
     "Report an Issue": {
       "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "报告问题" } } }
+    },
+    "Sort By": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "排序方式" } } }
+    },
+    "Added Order": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "添加顺序" } } }
+    },
+    "Name": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "名称" } } }
+    },
+    "Sort Order": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "排序方向" } } }
+    },
+    "Earliest Added First": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "最早添加优先" } } }
+    },
+    "Recently Added First": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "最近添加优先" } } }
+    },
+    "Ascending": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "升序" } } }
+    },
+    "Descending": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "降序" } } }
     }
   },
   "version": "1.0"

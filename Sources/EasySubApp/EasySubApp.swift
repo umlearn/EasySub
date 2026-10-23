@@ -1,6 +1,14 @@
 import SwiftUI
 import UserNotifications
 
+enum VideoSortField: String, Sendable {
+    case added, name, size, status
+}
+
+enum VideoSortDirection: String, Sendable {
+    case ascending, descending
+}
+
 @main
 struct EasySubApp: App {
     @State private var store = DownloadStore()
@@ -68,6 +76,8 @@ struct MainWindowCommandActions {
     var canMarkCompleted = false
     var isRunning = false
     var isSearchExpanded = false
+    var sortField: VideoSortField = .added
+    var sortDirection: VideoSortDirection = .ascending
 
     var removeSelected: () -> Void = {}
     var clearCompleted: () -> Void = {}
@@ -84,6 +94,8 @@ struct MainWindowCommandActions {
     var showPending: () -> Void = {}
     var showCompleted: () -> Void = {}
     var showNeedsAttention: () -> Void = {}
+    var setSortField: (VideoSortField) -> Void = { _ in }
+    var setSortDirection: (VideoSortDirection) -> Void = { _ in }
 }
 
 extension FocusedValues {
@@ -152,7 +164,42 @@ private struct MainWindowCommands: Commands {
             Button("Needs attention") { actions?.showNeedsAttention() }
                 .keyboardShortcut("4", modifiers: .command)
                 .disabled(actions == nil)
+
+            Divider()
+
+            Menu("Sort By") {
+                sortFieldToggle("Added Order", field: .added)
+                sortFieldToggle("Name", field: .name)
+                sortFieldToggle("Size", field: .size)
+                sortFieldToggle("Status", field: .status)
+            }
+            .disabled(actions == nil)
+
+            Menu("Sort Order") {
+                if actions?.sortField == .added {
+                    sortDirectionToggle("Earliest Added First", direction: .ascending)
+                    sortDirectionToggle("Recently Added First", direction: .descending)
+                } else {
+                    sortDirectionToggle("Ascending", direction: .ascending)
+                    sortDirectionToggle("Descending", direction: .descending)
+                }
+            }
+            .disabled(actions == nil)
         }
+    }
+
+    private func sortFieldToggle(_ title: LocalizedStringKey, field: VideoSortField) -> some View {
+        Toggle(title, isOn: Binding(
+            get: { actions?.sortField == field },
+            set: { if $0 { actions?.setSortField(field) } }
+        ))
+    }
+
+    private func sortDirectionToggle(_ title: LocalizedStringKey, direction: VideoSortDirection) -> some View {
+        Toggle(title, isOn: Binding(
+            get: { actions?.sortDirection == direction },
+            set: { if $0 { actions?.setSortDirection(direction) } }
+        ))
     }
 }
 

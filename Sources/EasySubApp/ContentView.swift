@@ -35,6 +35,61 @@ private enum ContentFocus: Hashable {
     case sidebar, videos
 }
 
+private struct VideoTableComparator: SortComparator {
+    var field: VideoSortField
+    var order: SortOrder = .forward
+
+    func compare(_ lhs: DownloadItem, _ rhs: DownloadItem) -> ComparisonResult {
+        let result: ComparisonResult
+        switch field {
+        case .added:
+            result = compareNames(lhs, rhs)
+        case .name:
+            result = compareNames(lhs, rhs)
+        case .size:
+            result = compareValues(lhs.video.size, rhs.video.size, lhs: lhs, rhs: rhs)
+        case .status:
+            result = compareValues(statusRank(lhs.status), statusRank(rhs.status), lhs: lhs, rhs: rhs)
+        }
+        return order == .forward ? result : result.reversed
+    }
+
+    private func compareValues<T: Comparable>(_ lhsValue: T, _ rhsValue: T,
+                                               lhs: DownloadItem, rhs: DownloadItem) -> ComparisonResult {
+        if lhsValue < rhsValue { return .orderedAscending }
+        if lhsValue > rhsValue { return .orderedDescending }
+        return compareNames(lhs, rhs)
+    }
+
+    private func compareNames(_ lhs: DownloadItem, _ rhs: DownloadItem) -> ComparisonResult {
+        let nameResult = lhs.video.url.lastPathComponent.localizedStandardCompare(rhs.video.url.lastPathComponent)
+        guard nameResult == .orderedSame else { return nameResult }
+        return lhs.video.url.path.localizedStandardCompare(rhs.video.url.path)
+    }
+
+    private func statusRank(_ status: DownloadStatus) -> Int {
+        switch status {
+        case .ready: 0
+        case .queued: 1
+        case .downloading: 2
+        case .completed: 3
+        case .partial: 4
+        case .failed: 5
+        case .cancelled: 6
+        }
+    }
+}
+
+private extension ComparisonResult {
+    var reversed: ComparisonResult {
+        switch self {
+        case .orderedAscending: .orderedDescending
+        case .orderedDescending: .orderedAscending
+        case .orderedSame: .orderedSame
+        }
+    }
+}
+
 struct ContentView: View {
     @Bindable var store: DownloadStore
     @Environment(\.openWindow) private var openWindow
@@ -54,11 +109,17 @@ struct ContentView: View {
     @AppStorage("overwriteSubtitles") private var overwrite = false
     @AppStorage("subtitleOutputDirectory") private var subtitleOutputDirectory = ""
     @AppStorage("notifyOnCompletion") private var notify = false
+    @AppStorage("videoSortField") private var videoSortField = VideoSortField.added.rawValue
+    @AppStorage("videoSortDirection") private var videoSortDirection = VideoSortDirection.ascending.rawValue
 
     private var visibleItems: [DownloadItem] {
-        store.items.filter {
+        let filtered = store.items.filter {
             (filter ?? .all).includes($0) && (search.isEmpty || $0.video.url.lastPathComponent.localizedCaseInsensitiveContains(search))
         }
+        guard currentSortField != .added else {
+            return currentSortDirection == .ascending ? filtered : Array(filtered.reversed())
+        }
+        return filtered.sorted(using: activeComparator)
     }
 
     private var selectedItem: DownloadItem? {
@@ -123,8 +184,8 @@ struct ContentView: View {
                         }
                     }
                 } else {
-                    Table(visibleItems, selection: $selection) {
-                        TableColumn("Video") { item in
+                    Table(visibleItems, selection: $selection, sortOrder: tableSortOrder) {
+                        TableColumn("Video", sortUsing: VideoTableComparator(field: .name)) { item in
                             HStack(spacing: 10) {
                                 Image(systemName: "film").foregroundStyle(.secondary)
                                 VStack(alignment: .leading, spacing: 3) {
@@ -134,11 +195,11 @@ struct ContentView: View {
                                 }.padding(.vertical, 6)
                             }.help(item.video.url.path)
                         }.width(min: 200, ideal: 340)
-                        TableColumn("Size") { item in
+                        TableColumn("Size", sortUsing: VideoTableComparator(field: .size)) { item in
                             Text(ByteCountFormatter.string(fromByteCount: item.video.size, countStyle: .file))
                                 .foregroundStyle(.secondary).monospacedDigit()
                         }.width(85)
-                        TableColumn("Status") { item in
+                        TableColumn("Status", sortUsing: VideoTableComparator(field: .status)) { item in
                             Label(item.status.title, systemImage: item.status.symbol)
                                 .foregroundStyle(item.status.color)
                                 .help(statusHelp(for: item))
@@ -433,6 +494,8 @@ struct ContentView: View {
             canMarkCompleted: canMarkAsCompleted(selection),
             isRunning: store.isRunning,
             isSearchExpanded: searchIsExpanded,
+            sortField: currentSortField,
+            sortDirection: currentSortDirection,
             removeSelected: removeSelected,
             clearCompleted: clearCompleted,
             clearAll: clearAll,
@@ -447,8 +510,46 @@ struct ContentView: View {
             showAll: { filter = .all },
             showPending: { filter = .pending },
             showCompleted: { filter = .completed },
-            showNeedsAttention: { filter = .attention }
+            showNeedsAttention: { filter = .attention },
+            setSortField: setSortField,
+            setSortDirection: setSortDirection
         )
+    }
+
+    private var currentSortField: VideoSortField {
+        VideoSortField(rawValue: videoSortField) ?? .added
+    }
+
+    private var currentSortDirection: VideoSortDirection {
+        VideoSortDirection(rawValue: videoSortDirection) ?? .ascending
+    }
+
+    private var activeComparator: VideoTableComparator {
+        VideoTableComparator(
+            field: currentSortField,
+            order: currentSortDirection == .ascending ? .forward : .reverse
+        )
+    }
+
+    private var tableSortOrder: Binding<[VideoTableComparator]> {
+        Binding(
+            get: { [activeComparator] },
+            set: { comparators in
+                guard let comparator = comparators.first else { return }
+                videoSortField = comparator.field.rawValue
+                videoSortDirection = comparator.order == .forward
+                    ? VideoSortDirection.ascending.rawValue
+                    : VideoSortDirection.descending.rawValue
+            }
+        )
+    }
+
+    private func setSortField(_ field: VideoSortField) {
+        videoSortField = field.rawValue
+    }
+
+    private func setSortDirection(_ direction: VideoSortDirection) {
+        videoSortDirection = direction.rawValue
     }
 
     private func removeSelected() {
