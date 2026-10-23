@@ -2437,6 +2437,12 @@
     },
     "GitHub returned HTTP status %lld.": {
       "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "GitHub 返回了 HTTP 状态码 %lld。" } } }
+    },
+    "Subtitles": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "字幕" } } }
+    },
+    "Report an Issue": {
+      "localizations": { "zh-Hans": { "stringUnit": { "state": "translated", "value": "报告问题" } } }
     }
   },
   "version": "1.0"

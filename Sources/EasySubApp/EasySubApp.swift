@@ -29,6 +29,7 @@ struct EasySubApp: App {
                 Button("Add videos") { selectVideos(store: store) }
                     .keyboardShortcut("o")
             }
+            MainWindowCommands()
             CommandGroup(replacing: .appSettings) {
                 Button("Settings…") { openWindow(id: "settings") }
                     .keyboardShortcut(",", modifiers: .command)
@@ -43,6 +44,9 @@ struct EasySubApp: App {
                 Button("EasySub Help") {
                     NSWorkspace.shared.open(URL(string: "https://github.com/umlearn/EasySub")!)
                 }
+                Button("Report an Issue") {
+                    NSWorkspace.shared.open(URL(string: "https://github.com/umlearn/EasySub/issues")!)
+                }
             }
         }
         Window("EasySub Settings", id: "settings") {
@@ -51,6 +55,104 @@ struct EasySubApp: App {
         }
         .defaultSize(width: 580, height: 760)
         .windowResizability(.contentMinSize)
+    }
+}
+
+struct MainWindowCommandActions {
+    var hasSelection = false
+    var hasSingleSelection = false
+    var hasCompletedItems = false
+    var hasItems = false
+    var hasPendingItems = false
+    var canMarkPending = false
+    var canMarkCompleted = false
+    var isRunning = false
+    var isSearchExpanded = false
+
+    var removeSelected: () -> Void = {}
+    var clearCompleted: () -> Void = {}
+    var clearAll: () -> Void = {}
+    var showInFinder: () -> Void = {}
+    var downloadPending: () -> Void = {}
+    var cancelDownload: () -> Void = {}
+    var searchSubtitlesManually: () -> Void = {}
+    var markPending: () -> Void = {}
+    var markCompleted: () -> Void = {}
+    var findVideos: () -> Void = {}
+    var closeSearch: () -> Void = {}
+    var showAll: () -> Void = {}
+    var showPending: () -> Void = {}
+    var showCompleted: () -> Void = {}
+    var showNeedsAttention: () -> Void = {}
+}
+
+extension FocusedValues {
+    @Entry var mainWindowCommands: MainWindowCommandActions?
+}
+
+private struct MainWindowCommands: Commands {
+    @FocusedValue(\.mainWindowCommands) private var actions
+
+    var body: some Commands {
+        CommandGroup(after: .newItem) {
+            Button("Remove selected") { actions?.removeSelected() }
+                .disabled(actions?.hasSelection != true || actions?.isRunning == true)
+
+            Divider()
+
+            Button("Clear completed") { actions?.clearCompleted() }
+                .disabled(actions?.hasCompletedItems != true || actions?.isRunning == true)
+            Button("Clear all videos") { actions?.clearAll() }
+                .disabled(actions?.hasItems != true || actions?.isRunning == true)
+
+            Divider()
+
+            Button("Show in Finder") { actions?.showInFinder() }
+                .disabled(actions?.hasSelection != true)
+        }
+
+        CommandMenu("Subtitles") {
+            Button("Download pending") { actions?.downloadPending() }
+                .keyboardShortcut(.return, modifiers: .command)
+                .disabled(actions?.hasPendingItems != true || actions?.isRunning == true)
+            Button("Cancel") { actions?.cancelDownload() }
+                .disabled(actions?.isRunning != true)
+
+            Divider()
+
+            Button("Search subtitles manually") { actions?.searchSubtitlesManually() }
+                .disabled(actions?.hasSingleSelection != true || actions?.isRunning == true)
+
+            Divider()
+
+            Button("Mark as Pending") { actions?.markPending() }
+                .disabled(actions?.canMarkPending != true || actions?.isRunning == true)
+            Button("Mark as Completed") { actions?.markCompleted() }
+                .disabled(actions?.canMarkCompleted != true || actions?.isRunning == true)
+        }
+
+        CommandGroup(after: .sidebar) {
+            Button("Find videos") { actions?.findVideos() }
+                .keyboardShortcut("f", modifiers: .command)
+                .disabled(actions == nil)
+            Button("Close search") { actions?.closeSearch() }
+                .disabled(actions?.isSearchExpanded != true)
+
+            Divider()
+
+            Button("All videos") { actions?.showAll() }
+                .keyboardShortcut("1", modifiers: .command)
+                .disabled(actions == nil)
+            Button("Pending") { actions?.showPending() }
+                .keyboardShortcut("2", modifiers: .command)
+                .disabled(actions == nil)
+            Button("Completed") { actions?.showCompleted() }
+                .keyboardShortcut("3", modifiers: .command)
+                .disabled(actions == nil)
+            Button("Needs attention") { actions?.showNeedsAttention() }
+                .keyboardShortcut("4", modifiers: .command)
+                .disabled(actions == nil)
+        }
     }
 }
 

@@ -187,26 +187,38 @@ struct ContentView: View {
                             .padding(14)
                         }
                     }
-                    .contextMenu {
-                        if selection.isEmpty {
+                    .contextMenu(forSelectionType: URL.self) { contextSelection in
+                        Group {
+                        if contextSelection.isEmpty {
                             Button { selectVideos(store: store) } label: {
                                 Label("Add videos", systemImage: "plus")
                             }
                         } else {
-                            Button("Search subtitles manually") { showSubtitles = true }
-                                .disabled(store.isRunning || selection.count != 1)
-                            if canMarkSelectionAsPending {
-                                Button("Mark as Pending") { store.mark(selection, as: .ready) }
+                            Button("Search subtitles manually") {
+                                selection = contextSelection
+                                showSubtitles = true
+                            }
+                                .disabled(store.isRunning || contextSelection.count != 1)
+                            Divider()
+                            if canMarkAsPending(contextSelection) {
+                                Button("Mark as Pending") { store.mark(contextSelection, as: .ready) }
                                     .disabled(store.isRunning)
                             }
-                            if canMarkSelectionAsCompleted {
-                                Button("Mark as Completed") { store.mark(selection, as: .completed) }
+                            if canMarkAsCompleted(contextSelection) {
+                                Button("Mark as Completed") { store.mark(contextSelection, as: .completed) }
                                     .disabled(store.isRunning)
                             }
-                            Button("Remove selected", role: .destructive) { store.remove(selection); selection.removeAll() }
+                            Button("Remove selected", role: .destructive) {
+                                store.remove(contextSelection)
+                                selection.subtract(contextSelection)
+                            }
                                 .disabled(store.isRunning)
-                            Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting(Array(selection)) }
+                            Button("Show in Finder") {
+                                NSWorkspace.shared.activateFileViewerSelecting(Array(contextSelection))
+                            }
                         }
+                        }
+                        .onAppear { adoptContextSelection(contextSelection) }
                     }
                     .onDeleteCommand { store.remove(selection) }
                 }
@@ -272,6 +284,7 @@ struct ContentView: View {
             }
         }
         .defaultFocus($contentFocus, .videos)
+        .focusedSceneValue(\.mainWindowCommands, mainWindowCommandActions)
         .onChange(of: store.items.isEmpty) { wasEmpty, isEmpty in
             guard wasEmpty, !isEmpty else { return }
             // The table does not exist while the empty-state view is visible. Once the first
@@ -396,12 +409,7 @@ struct ContentView: View {
                 Button("Cancel", role: .cancel) { store.cancel() }.disabled(store.isCancelling)
             } else {
                 Button {
-                    do {
-                        store.start(preference: SubtitlePreference(rawValue: preference) ?? .ass, overwrite: overwrite,
-                                    renameSubtitle: renameSubtitles,
-                                    outputDirectory: configuredOutputDirectory,
-                                    service: try SubtitleSourceSettings.service())
-                    } catch { configurationError = error.localizedDescription }
+                    startDownloads()
                 } label: { Label("Download pending", systemImage: "arrow.down.circle.fill") }
                 .buttonStyle(.borderedProminent).controlSize(.large)
                 .disabled(store.pendingCount == 0 || store.activeImports > 0)
@@ -414,21 +422,108 @@ struct ContentView: View {
         subtitleOutputDirectory.isEmpty ? nil : URL(fileURLWithPath: subtitleOutputDirectory, isDirectory: true)
     }
 
+    private var mainWindowCommandActions: MainWindowCommandActions {
+        MainWindowCommandActions(
+            hasSelection: !selection.isEmpty,
+            hasSingleSelection: selection.count == 1,
+            hasCompletedItems: store.items.contains { $0.status == .completed },
+            hasItems: !store.items.isEmpty,
+            hasPendingItems: store.pendingCount > 0 && store.activeImports == 0,
+            canMarkPending: canMarkAsPending(selection),
+            canMarkCompleted: canMarkAsCompleted(selection),
+            isRunning: store.isRunning,
+            isSearchExpanded: searchIsExpanded,
+            removeSelected: removeSelected,
+            clearCompleted: clearCompleted,
+            clearAll: clearAll,
+            showInFinder: showSelectionInFinder,
+            downloadPending: startDownloads,
+            cancelDownload: { store.cancel() },
+            searchSubtitlesManually: searchSelectedItemManually,
+            markPending: { store.mark(selection, as: .ready) },
+            markCompleted: { store.mark(selection, as: .completed) },
+            findVideos: expandSearch,
+            closeSearch: closeSearch,
+            showAll: { filter = .all },
+            showPending: { filter = .pending },
+            showCompleted: { filter = .completed },
+            showNeedsAttention: { filter = .attention }
+        )
+    }
+
+    private func removeSelected() {
+        store.remove(selection)
+        selection.removeAll()
+    }
+
+    private func clearCompleted() {
+        let completed = Set(store.items.filter { $0.status == .completed }.map(\.id))
+        store.clearCompleted()
+        selection.subtract(completed)
+    }
+
+    private func clearAll() {
+        store.clearAll()
+        selection.removeAll()
+    }
+
+    private func showSelectionInFinder() {
+        guard !selection.isEmpty else { return }
+        NSWorkspace.shared.activateFileViewerSelecting(Array(selection))
+    }
+
+    private func searchSelectedItemManually() {
+        guard selection.count == 1, !store.isRunning else { return }
+        showSubtitles = true
+    }
+
+    private func startDownloads() {
+        do {
+            store.start(preference: SubtitlePreference(rawValue: preference) ?? .ass, overwrite: overwrite,
+                        renameSubtitle: renameSubtitles,
+                        outputDirectory: configuredOutputDirectory,
+                        service: try SubtitleSourceSettings.service())
+        } catch {
+            configurationError = error.localizedDescription
+        }
+    }
+
+    private func expandSearch() {
+        searchIsExpanded = true
+        Task { @MainActor in searchIsFocused = true }
+    }
+
+    private func closeSearch() {
+        search = ""
+        searchIsExpanded = false
+        searchIsFocused = false
+        contentFocus = .videos
+    }
+
     private func statusHelp(for item: DownloadItem) -> String {
         guard !item.detail.isEmpty else { return item.status.helpText }
         return item.status.helpText + "\n\n" + item.detail
     }
 
-    private var canMarkSelectionAsPending: Bool {
+    private func adoptContextSelection(_ contextSelection: Set<URL>) {
+        guard !contextSelection.isEmpty else { return }
+        if contextSelection.count == 1, let clicked = contextSelection.first, selection.contains(clicked) {
+            return
+        }
+        selection = contextSelection
+        contentFocus = .videos
+    }
+
+    private func canMarkAsPending(_ ids: Set<URL>) -> Bool {
         store.items.contains { item in
-            guard selection.contains(item.id) else { return false }
+            guard ids.contains(item.id) else { return false }
             return item.status == .completed || item.status == .failed || item.status == .partial
         }
     }
 
-    private var canMarkSelectionAsCompleted: Bool {
+    private func canMarkAsCompleted(_ ids: Set<URL>) -> Bool {
         store.items.contains { item in
-            guard selection.contains(item.id) else { return false }
+            guard ids.contains(item.id) else { return false }
             return item.status == .ready || item.status == .cancelled
                 || item.status == .failed || item.status == .partial
         }
