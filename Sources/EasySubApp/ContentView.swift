@@ -644,7 +644,6 @@ private struct CollapsibleSearchControl: View {
     @Binding var isPresented: Bool
     let prompt: String
     @State private var widthProgress: CGFloat = 0
-    @State private var showsExpandedContent = false
     @State private var widthAnimationTask: Task<Void, Never>?
 
     private let collapsedWidth: CGFloat = 38
@@ -658,38 +657,33 @@ private struct CollapsibleSearchControl: View {
                 isPresented: $isPresented,
                 prompt: prompt
             )
-            .opacity(showsExpandedContent ? 1 : 0)
+            .opacity(expandedContentOpacity)
             .allowsHitTesting(isPresented)
 
-            if !showsExpandedContent {
-                Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        isPresented = true
-                    }
-                } label: {
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 14, weight: .medium))
-                        .frame(width: 38, height: 30)
-                        .contentShape(Rectangle())
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isPresented = true
                 }
-                .buttonStyle(.plain)
-                .help(prompt)
-                .accessibilityLabel(Text("Find videos"))
-                .transition(.opacity)
+            } label: {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 14, weight: .medium))
+                    .frame(width: 38, height: 30)
+                    .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .help(prompt)
+            .accessibilityLabel(Text("Find videos"))
+            .opacity(collapsedContentOpacity)
+            .allowsHitTesting(!isPresented && widthProgress < 0.001)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
         }
         .frame(width: collapsedWidth + (expandedWidth - collapsedWidth) * widthProgress,
                height: 30)
         .clipped()
-        .animation(.easeInOut(duration: 0.16), value: showsExpandedContent)
         .onAppear {
             widthProgress = isPresented ? 1 : 0
-            showsExpandedContent = isPresented
         }
         .onChange(of: isPresented) { _, expanded in
-            if expanded {
-                showsExpandedContent = true
-            }
             animateWidth(expanded: expanded)
         }
         .onDisappear {
@@ -697,16 +691,19 @@ private struct CollapsibleSearchControl: View {
         }
     }
 
+    private var collapsedContentOpacity: Double {
+        Double(max(0, min(1, 1 - widthProgress / 0.35)))
+    }
+
+    private var expandedContentOpacity: Double {
+        Double(max(0, min(1, (widthProgress - 0.05) / 0.3)))
+    }
+
     private func animateWidth(expanded: Bool) {
         widthAnimationTask?.cancel()
         let start = widthProgress
         let target: CGFloat = expanded ? 1 : 0
-        guard abs(target - start) > 0.001 else {
-            if !expanded {
-                showsExpandedContent = false
-            }
-            return
-        }
+        guard abs(target - start) > 0.001 else { return }
 
         widthAnimationTask = Task { @MainActor in
             let startedAt = Date()
@@ -724,10 +721,6 @@ private struct CollapsibleSearchControl: View {
                 }
             }
 
-            guard !isPresented else { return }
-            withAnimation(.easeOut(duration: 0.12)) {
-                showsExpandedContent = false
-            }
         }
     }
 }
