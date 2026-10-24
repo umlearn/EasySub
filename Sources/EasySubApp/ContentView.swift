@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import UniformTypeIdentifiers
 import UserNotifications
 
@@ -102,7 +103,6 @@ struct ContentView: View {
     @State private var isDropTarget = false
     @State private var contentWidth: CGFloat = 820
     @State private var contentHeight: CGFloat = 520
-    @FocusState private var searchIsFocused: Bool
     @FocusState private var contentFocus: ContentFocus?
     @AppStorage("SZSubTypeKey") private var preference = SubtitlePreference.ass.rawValue
     @AppStorage("renameSubtitles") private var renameSubtitles = true
@@ -292,12 +292,23 @@ struct ContentView: View {
             .navigationTitle((filter ?? .all).title)
             .toolbar {
                 ToolbarItemGroup(placement: .primaryAction) {
-                    Button { selectVideos(store: store) } label: { Label("Add videos", systemImage: "plus") }
+                    Button {
+                        collapseEmptySearch()
+                        selectVideos(store: store)
+                    } label: { Label("Add videos", systemImage: "plus") }
                         .help("Add video files or folders")
-                    Button { store.remove(selection); selection.removeAll() } label: { Label("Remove selected", systemImage: "minus") }
+                    Button {
+                        collapseEmptySearch()
+                        store.remove(selection)
+                        selection.removeAll()
+                    } label: { Label("Remove selected", systemImage: "minus") }
                         .disabled(selection.isEmpty || store.isRunning)
                         .help("Remove selected videos from the list")
-                    Button { store.clearAll(); selection.removeAll() } label: { Label("Clear all videos", systemImage: "trash") }
+                    Button {
+                        collapseEmptySearch()
+                        store.clearAll()
+                        selection.removeAll()
+                    } label: { Label("Clear all videos", systemImage: "trash") }
                         .disabled(store.items.isEmpty || store.isRunning)
                         .help("Clear all videos from the list")
                 }
@@ -306,7 +317,13 @@ struct ContentView: View {
                     ToolbarSpacer(.fixed, placement: .primaryAction)
                 }
 #endif
-                ToolbarItem(placement: .primaryAction) { searchControl }
+                ToolbarItem(placement: .primaryAction) {
+                    CollapsibleSearchControl(
+                        text: $search,
+                        isPresented: $searchIsExpanded,
+                        prompt: String(localized: "Find videos")
+                    )
+                }
             }
             .overlay {
                 if isDropTarget {
@@ -325,7 +342,6 @@ struct ContentView: View {
             }
         }
         .frame(minWidth: 820, minHeight: 520)
-        .contentShape(Rectangle())
         .contextMenu {
             Button { selectVideos(store: store) } label: {
                 Label("Add videos", systemImage: "plus")
@@ -359,7 +375,7 @@ struct ContentView: View {
         .onChange(of: selection) { _, selected in
             // A row selection is an interaction with the primary table. Keep its native active
             // selection color instead of leaving focus on the import or toolbar button.
-            if !selected.isEmpty, !showSubtitles, !searchIsFocused {
+            if !selected.isEmpty, !showSubtitles {
                 contentFocus = .videos
             }
         }
@@ -402,50 +418,37 @@ struct ContentView: View {
     }
 
     private var header: some View {
-        HStack {
-            Picker("Format", selection: $preference) {
-                Text("ASS first").tag("ASS")
-                Text("SRT first").tag("SRT")
-                Text("Both").tag("BOTH")
-            }.pickerStyle(.segmented).frame(maxWidth: 310).disabled(store.isRunning)
-            if store.activeImports > 0 { ProgressView().controlSize(.small).help("Scanning folders…") }
-            Spacer()
-            Label(overwrite ? LocalizedStringKey("Replace existing") : LocalizedStringKey("Keep existing"), systemImage: overwrite ? "arrow.triangle.2.circlepath" : "lock.shield")
-                .font(.caption).foregroundStyle(.secondary)
-        }.padding(18)
-    }
-
-    @ViewBuilder private var searchControl: some View {
-        if searchIsExpanded {
-            HStack(spacing: 7) {
-                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                TextField("Find videos", text: $search)
-                    .textFieldStyle(.plain)
-                    .focused($searchIsFocused)
-                    .frame(width: 220)
-                Button {
-                    search = ""
-                    searchIsExpanded = false
-                    searchIsFocused = false
-                    contentFocus = .videos
+        HStack(spacing: 12) {
+            HStack(spacing: 10) {
+                Text("Format")
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                Picker(selection: $preference) {
+                    Text("ASS first").tag("ASS")
+                    Text("SRT first").tag("SRT")
+                    Text("Both").tag("BOTH")
                 } label: {
-                    Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                    EmptyView()
                 }
-                .buttonStyle(.plain)
-                .help("Close search")
+                .pickerStyle(.segmented)
+                .frame(width: 310, alignment: .leading)
+                .disabled(store.isRunning)
             }
-            .padding(.horizontal, 10)
-        } else {
-            Button {
-                searchIsExpanded = true
-                Task { @MainActor in searchIsFocused = true }
-            } label: {
-                Label("Find videos", systemImage: "magnifyingglass").labelStyle(.iconOnly)
+            .fixedSize(horizontal: true, vertical: false)
+            .layoutPriority(1)
+            if store.activeImports > 0 { ProgressView().controlSize(.small).help("Scanning folders…") }
+            Spacer(minLength: 8)
+            ViewThatFits(in: .horizontal) {
+                Label(overwrite ? LocalizedStringKey("Replace existing") : LocalizedStringKey("Keep existing"),
+                      systemImage: overwrite ? "arrow.triangle.2.circlepath" : "lock.shield")
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                Image(systemName: overwrite ? "arrow.triangle.2.circlepath" : "lock.shield")
+                    .help(overwrite ? "Replace existing" : "Keep existing")
             }
-            .buttonStyle(.bordered)
-            .buttonBorderShape(.circle)
-            .help("Find videos")
-        }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }.padding(18)
     }
 
     private var footer: some View {
@@ -591,14 +594,19 @@ struct ContentView: View {
 
     private func expandSearch() {
         searchIsExpanded = true
-        Task { @MainActor in searchIsFocused = true }
     }
 
     private func closeSearch() {
         search = ""
         searchIsExpanded = false
-        searchIsFocused = false
         contentFocus = .videos
+    }
+
+    private func collapseEmptySearch() {
+        guard searchIsExpanded,
+              search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        search = ""
+        searchIsExpanded = false
     }
 
     private func statusHelp(for item: DownloadItem) -> String {
@@ -628,6 +636,290 @@ struct ContentView: View {
             return item.status == .ready || item.status == .cancelled
                 || item.status == .failed || item.status == .partial
         }
+    }
+}
+
+private struct CollapsibleSearchControl: View {
+    @Binding var text: String
+    @Binding var isPresented: Bool
+    let prompt: String
+    @State private var widthProgress: CGFloat = 0
+    @State private var showsExpandedContent = false
+    @State private var widthAnimationTask: Task<Void, Never>?
+
+    private let collapsedWidth: CGFloat = 38
+    private let expandedWidth: CGFloat = 220
+    private let animationDuration: TimeInterval = 0.2
+
+    var body: some View {
+        ZStack {
+            NativeCollapsibleSearchField(
+                text: $text,
+                isPresented: $isPresented,
+                prompt: prompt
+            )
+            .opacity(showsExpandedContent ? 1 : 0)
+            .allowsHitTesting(isPresented)
+
+            if !showsExpandedContent {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        isPresented = true
+                    }
+                } label: {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 14, weight: .medium))
+                        .frame(width: 38, height: 30)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(prompt)
+                .accessibilityLabel(Text("Find videos"))
+                .transition(.opacity)
+            }
+        }
+        .frame(width: collapsedWidth + (expandedWidth - collapsedWidth) * widthProgress,
+               height: 30)
+        .clipped()
+        .animation(.easeInOut(duration: 0.16), value: showsExpandedContent)
+        .onAppear {
+            widthProgress = isPresented ? 1 : 0
+            showsExpandedContent = isPresented
+        }
+        .onChange(of: isPresented) { _, expanded in
+            if expanded {
+                showsExpandedContent = true
+            }
+            animateWidth(expanded: expanded)
+        }
+        .onDisappear {
+            widthAnimationTask?.cancel()
+        }
+    }
+
+    private func animateWidth(expanded: Bool) {
+        widthAnimationTask?.cancel()
+        let start = widthProgress
+        let target: CGFloat = expanded ? 1 : 0
+        guard abs(target - start) > 0.001 else {
+            if !expanded {
+                showsExpandedContent = false
+            }
+            return
+        }
+
+        widthAnimationTask = Task { @MainActor in
+            let startedAt = Date()
+            while !Task.isCancelled {
+                let elapsed = Date().timeIntervalSince(startedAt)
+                let linearProgress = min(max(elapsed / animationDuration, 0), 1)
+                let easedProgress = linearProgress * linearProgress * (3 - 2 * linearProgress)
+                widthProgress = start + (target - start) * CGFloat(easedProgress)
+
+                guard linearProgress < 1 else { break }
+                do {
+                    try await Task.sleep(for: .milliseconds(16))
+                } catch {
+                    return
+                }
+            }
+
+            guard !isPresented else { return }
+            withAnimation(.easeOut(duration: 0.12)) {
+                showsExpandedContent = false
+            }
+        }
+    }
+}
+
+private struct NativeCollapsibleSearchField: NSViewRepresentable {
+    @Binding var text: String
+    @Binding var isPresented: Bool
+    let prompt: String
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(text: $text, isPresented: $isPresented)
+    }
+
+    func makeNSView(context: Context) -> CollapsibleSearchField {
+        let field = CollapsibleSearchField()
+        field.delegate = context.coordinator
+        field.target = context.coordinator
+        field.action = #selector(Coordinator.searchChanged(_:))
+        field.onCollapsedClick = { [weak coordinator = context.coordinator, weak field] in
+            guard let coordinator, let field else { return }
+            coordinator.activate(field)
+        }
+        field.sendsSearchStringImmediately = true
+        field.sendsWholeSearchString = false
+        field.focusRingType = .none
+        field.setContentCompressionResistancePriority(.required, for: .horizontal)
+        context.coordinator.installOutsideClickMonitor(for: field)
+        return field
+    }
+
+    static func dismantleNSView(_ field: CollapsibleSearchField, coordinator: Coordinator) {
+        coordinator.removeOutsideClickMonitor()
+    }
+
+    func updateNSView(_ field: CollapsibleSearchField, context: Context) {
+        context.coordinator.update(text: $text, isPresented: $isPresented)
+        field.isCollapsed = !isPresented
+        field.placeholderString = isPresented ? prompt : ""
+        field.toolTip = prompt
+        if field.stringValue != text {
+            field.stringValue = text
+        }
+
+        if isPresented, !context.coordinator.wasPresented {
+            context.coordinator.scheduleFocus(for: field)
+        } else if !isPresented,
+                  context.coordinator.wasPresented {
+            context.coordinator.cancelFocus()
+            if field.currentEditor() != nil {
+                field.window?.makeFirstResponder(nil)
+            }
+        }
+        context.coordinator.wasPresented = isPresented
+    }
+
+    @MainActor
+    final class Coordinator: NSObject, NSSearchFieldDelegate {
+        private var text: Binding<String>
+        private var isPresented: Binding<Bool>
+        var wasPresented = false
+        private var focusTask: Task<Void, Never>?
+        private var isActivating = false
+        private var outsideClickMonitor: Any?
+
+        init(text: Binding<String>, isPresented: Binding<Bool>) {
+            self.text = text
+            self.isPresented = isPresented
+        }
+
+        func update(text: Binding<String>, isPresented: Binding<Bool>) {
+            self.text = text
+            self.isPresented = isPresented
+        }
+
+        func controlTextDidBeginEditing(_ obj: Notification) {
+            if !isPresented.wrappedValue {
+                isActivating = true
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isPresented.wrappedValue = true
+                }
+            }
+            if focusTask == nil {
+                isActivating = false
+            }
+        }
+
+        func activate(_ field: NSSearchField) {
+            guard !isPresented.wrappedValue else { return }
+            isActivating = true
+            withAnimation(.easeInOut(duration: 0.2)) {
+                isPresented.wrappedValue = true
+            }
+        }
+
+        func controlTextDidChange(_ obj: Notification) {
+            syncText(from: obj.object as? NSSearchField)
+        }
+
+        func controlTextDidEndEditing(_ obj: Notification) {
+            guard let field = obj.object as? NSSearchField else { return }
+            guard !isActivating else { return }
+            if field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                collapse()
+            }
+        }
+
+        @objc func searchChanged(_ sender: NSSearchField) {
+            if !isPresented.wrappedValue {
+                activate(sender)
+                return
+            }
+            syncText(from: sender)
+        }
+
+        func scheduleFocus(for field: NSSearchField) {
+            focusTask?.cancel()
+            isActivating = true
+            focusTask = Task { @MainActor [weak self, weak field] in
+                await Task.yield()
+                guard let self, let field, self.isPresented.wrappedValue else { return }
+                field.window?.makeFirstResponder(field)
+
+                // AppKit can briefly resign the field while the toolbar item resizes. Ignore
+                // that transient end-editing event, then collapse only if focus never landed.
+                do {
+                    try await Task.sleep(for: .milliseconds(220))
+                } catch {
+                    return
+                }
+                guard !Task.isCancelled else { return }
+                self.isActivating = false
+                self.focusTask = nil
+                if field.currentEditor() == nil,
+                   field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    self.collapse()
+                }
+            }
+        }
+
+        func cancelFocus() {
+            focusTask?.cancel()
+            focusTask = nil
+            isActivating = false
+        }
+
+        func installOutsideClickMonitor(for field: CollapsibleSearchField) {
+            removeOutsideClickMonitor()
+            outsideClickMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) {
+                [weak self, weak field] event in
+                guard let self, let field,
+                      event.window === field.window,
+                      self.isPresented.wrappedValue,
+                      field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                else { return event }
+
+                let point = field.convert(event.locationInWindow, from: nil)
+                if !field.bounds.contains(point) {
+                    self.collapse()
+                }
+                return event
+            }
+        }
+
+        func removeOutsideClickMonitor() {
+            guard let outsideClickMonitor else { return }
+            NSEvent.removeMonitor(outsideClickMonitor)
+            self.outsideClickMonitor = nil
+        }
+
+        private func collapse() {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                isPresented.wrappedValue = false
+            }
+        }
+
+        private func syncText(from field: NSSearchField?) {
+            guard let field, text.wrappedValue != field.stringValue else { return }
+            text.wrappedValue = field.stringValue
+        }
+    }
+}
+
+private final class CollapsibleSearchField: NSSearchField {
+    var isCollapsed = true
+    var onCollapsedClick: (() -> Void)?
+
+    override func mouseDown(with event: NSEvent) {
+        guard isCollapsed else {
+            super.mouseDown(with: event)
+            return
+        }
+        onCollapsedClick?()
     }
 }
 
